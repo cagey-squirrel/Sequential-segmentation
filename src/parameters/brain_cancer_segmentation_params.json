@@ -1,0 +1,21 @@
+{
+  "data_dir": "/home/dzi/Documents/repos/archive/BraTS2020_training_data/content/data/",
+  "model_architecture": "unet",
+  "standard_histogram_path": "src/data_loading/standard_histogram.npz",
+  "normalization": "Basic",
+  "learning_rate": 0.0001,
+  "batch_size": 8,            
+  "output_path" : "output",
+  "num_epochs": 501,
+  "augment": false,
+  "regularization": 0.00,
+  "ensemble": false,
+  "trained_models_path": "src/trained_models",
+  "image_size": 256,
+  "shuffle_training": true,
+  "val_percentage": 10,
+  "output_dir_path": "src/training_output/output_pictures",
+  "probability_treshold" : 0.5,
+  "split_by_patient" : true,
+  "bce_pos_weight" : 1000
+}
