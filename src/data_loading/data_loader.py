@@ -11,13 +11,14 @@ import json
 from datetime import datetime
 import os
 import random
-from data_loading.augmentors import augment_images
+from src.data_loading.augmentors import augment_images
 import h5py
 import psutil
 from collections import defaultdict
+import albumentations as albu
 
 
-def load_data(data_dir, batch_size, test_data_percentage, normalization, standard_histogram_path, ensemble, split_by_patient, augment):
+def get_dataloaders(data_dir, batch_size, test_data_percentage, normalization, standard_histogram_path, ensemble, split_by_patient, augment):
     '''
     Loads images from data_dir
     Inputs:
@@ -124,37 +125,20 @@ def get_all_data_paths(data_dir):
     all_data_paths = []
     last_volume_name = '-1'
     all_paths_for_single_patient = []
-    shapes = defaultdict(lambda: 0)
-    found_cancer = False
-    total_cancer_patients = 0
-    total_cancer_slices = 0
 
     for slice_name in sorted(os.listdir(data_dir)):
         volume_name = slice_name.split('_')[1]
 
         # We encountered a new patient 
         if (volume_name != last_volume_name) and (last_volume_name != '-1'):
-            total_cancer_patients += found_cancer
-
             all_data_paths.append(all_paths_for_single_patient)  # Save data for old patient 
-            all_paths_for_single_patient = []          # REset data for new patient
-            found_cancer = False
+            all_paths_for_single_patient = []                    # Reset data for new patient
         
         last_volume_name = volume_name
         slice_path = os.path.join(data_dir, slice_name)
         all_paths_for_single_patient.append(slice_path)
 
-        f = h5py.File(slice_path, 'r') 
-        image, mask = f['image'][()], f['mask'][()]
-        if mask.sum():
-            found_cancer = True
-            total_cancer_slices += 1
-        #shapes[image.shape] += 1
-        #f.close()
         
-    print(dict(shapes))
-    print(f'total_cancer_patients = {total_cancer_patients}, total_cancer_slices = {total_cancer_slices}')
-    exit(1)
     # Appending data for last patient
     all_data_paths.append(all_paths_for_single_patient)
     
@@ -249,116 +233,51 @@ def preprocess_image_and_mask(image, mask):
     # channel manipulation
     
     # Getting only FLAIR data
-    image = image[..., 0]
-    #image = image / 
+    image, mask = crop_square(image), crop_square(mask)
+    image = (image - image.min()) / (image.max() - image.min())
 
 
-def normalize_images(training_data, testing_data, normalization = 'Basic', standard_hist_path = ''):
-
-    training_images, training_masks, training_names = [list(image_pair) for image_pair in zip(*training_data)]
+def get_preprocessing(preprocessing_fn):
+    """Construct preprocessing transform
     
-    testing_images, testing_masks, testing_names = [list(image_pair) for image_pair in zip(*testing_data)]
-
-    # Normalizing masks
-    training_masks = np.array(training_masks)
-    testing_masks = np.array(testing_masks)
-    training_masks[training_masks > 0] = 1
-    testing_masks[testing_masks > 0] = 1
-
-    if normalization == 'Basic':
-        training_images, testing_images = basic_normalization(training_images, testing_images)
-
+    Args:
+        preprocessing_fn (callbale): data normalization function 
+            (can be specific for each pretrained neural network)
+    Return:
+        transform: albumentations.Compose
     
-    if normalization == 'Nyul':
-        training_images, testing_images = nyul_normalization(training_images, testing_images, standard_hist_path)
+    """
+    
+    _transform = [
+        albu.Lambda(image=preprocessing_fn),
+        #albu.Lambda(image=to_tensor, mask=to_tensor),
+    ]
+    return albu.Compose(_transform)
 
-    # Zipping data back to (scan, mask) pairs                                                                                                                                                                                                                                                                                                                                                                
-    normalized_training_data = list(zip(training_images, training_masks, training_names))
-    normalized_testing_data =  list(zip(testing_images, testing_masks, testing_names))
-
-    return normalized_training_data, normalized_testing_data
 
 
-def basic_normalization(training_images, testing_images):
+def crop_square(image, square_size=224):
     '''
-    Returns normalized tensors
-    Normalization is done based on parameters from training_images
-    Values of tensor images are put between 0 and 1
-    Input:
-        -training_images: tensor which will be normalized based on its values
-        -testing_images: tensor which will be normalized based on values from training_images
-    Returns:
-        -normalized_training_images: tensor with all values between 0 and 1
-        -normalized_testing_images: tensor with all values between 0 and 1
+    Crops image to a square shape with width and height equal to square size
+    If image dimension is smaller than square size then no cropping is done
     '''
 
-    training_images = np.array(training_images)
-    testing_images = np.array(testing_images)
+    channels, width, height = image.shape
 
-    max_value = np.max(training_images)
-    min_value = np.min(training_images)
-
-    normalized_training_images = (training_images - min_value) / (max_value - min_value)
-    normalized_testing_images = (testing_images - min_value) / (max_value - min_value)
-
-    return normalized_training_images, normalized_testing_images
-
-
-def nyul_normalization(training_images, testing_images, standard_hist_path):
+    if width > square_size:
+        side_crop = (width - square_size) // 2
+        image = image[:, side_crop : -side_crop, :]
     
-    if not os.path.exists(standard_hist_path):
-        nyul_train_standard_scale(training_images, standard_hist_path)
-    
-    data = np.load(standard_hist_path)
-    standard_scale = data['standard_scale']
-    percs = data['percs']
-
-    training_landmarks = np.percentile(training_images, percs)
-    testing_landmarks = np.percentile(testing_images, percs)
-
-    training_f = interp1d(training_landmarks, standard_scale, kind='linear', fill_value='extrapolate')  # define interpolating function
-
-    testing_f = interp1d(testing_landmarks, standard_scale, kind='linear', fill_value='extrapolate')  # define interpolating function            
-
-    training_normalized_images = training_f(training_images)
-    testing_normalized_images  = testing_f(testing_images)
-
-    training_normalized_images = (training_normalized_images - np.min(training_normalized_images)) / np.ptp(training_normalized_images)
-    testing_normalized_images = (testing_normalized_images - np.min(testing_normalized_images)) / np.ptp(testing_normalized_images)
-
-    #if len(normalized_images) > 0:
-    #    volumes[id_] = np.transpose(normalized_images, (2, 0, 1))
-    #    masks[id_] = np.transpose(labels, (2, 0, 1))
-    print(np.max(training_normalized_images))
-    print(np.min(training_normalized_images))
-    return training_normalized_images, testing_normalized_images
+    if height > square_size:
+        top_crop = (height - square_size) // 2
+        image = image[:, :, top_crop : -top_crop]
 
 
-def nyul_train_standard_scale(images,
-                              standard_hist_path,
-                              i_min=1,
-                              i_max=99,
-                              i_s_min=1,
-                              i_s_max=100,
-                              l_percentile=10,
-                              u_percentile=90,
-                              step=10):
+    return image
 
-    percs = np.concatenate(([i_min], np.arange(l_percentile, u_percentile + 1, step), [i_max]))
-    standard_scale = np.zeros(len(percs))
 
-    for scan_image in images:
-        landmarks_1 = np.percentile(scan_image, percs)
 
-        min_p = np.percentile(scan_image, i_min)
-        max_p = np.percentile(scan_image, i_max)
-        f = interp1d([min_p, max_p], [i_s_min, i_s_max])  # create interpolating function
 
-        landmarks_2 = np.array(f(landmarks_1))  # interpolate landmarks
-        standard_scale += landmarks_2  # add landmark values of this volume to standard_scale
-
-    standard_scale = standard_scale / len(images)  # get mean values
-    np.savez(standard_hist_path, standard_scale=standard_scale, percs=percs)
 
 
 def info_dump(total_loss, metrics, epoch_num, output_file, mode):

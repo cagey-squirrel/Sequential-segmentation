@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from segmentation_models_pytorch.base import modules as md
+from my_segmentation_models_pytorch.base import modules as md
 
 
 class PAB(nn.Module):

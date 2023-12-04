@@ -1,13 +1,18 @@
-from data_loading.data_loader import load_data, rename_files, info_dump, prepare_output_files, save_prediction_and_truth
+from src.data_loading.data_loader import get_dataloaders, rename_files, info_dump, prepare_output_files, save_prediction_and_truth
 from matplotlib import pyplot as plt
 from torch import nn, optim
 import torch
-from loss_and_metrics.dice_loss import DiceLoss 
-from loss_and_metrics.util import calculate_metrics_for_batch, add_new_metrics, average_metrics
+from src.loss_and_metrics.dice_loss import DiceLoss 
+from src.loss_and_metrics.util import calculate_metrics_for_batch, add_new_metrics, average_metrics
 import os
-from models.unet import UNet
+from src.models.unet import UNet
 from datetime import datetime
-from models.unet_resnext50 import UNetWithResnet50Encoder
+from src.models.unet_resnext50 import UNetWithResnet50Encoder
+from src.models.smp_unet import SmpUnet
+import sys
+sys.path.append("...") # Adds higher directory to python modules path.
+import my_segmentation_models_pytorch as smp 
+
 
 def training(unet, training_data, device, optimizer, loss_function, epoch_num, output_file, output_dir_path, params):
     unet.train()
@@ -90,7 +95,18 @@ def validation(unet, eval_data, device, loss_function, epoch_num, output_file, o
 def train(params):
     # rename_files(params['data_dir'])
 
-    loader_train, loader_valid = load_data(
+
+    print(f'starting')
+    encoder_acrhitecture = 'resnet34' 
+    weights = 'imagenet'
+    unet = SmpUnet(encoder_acrhitecture, 3, 1, weights=weights)
+    preprocessing_fn = smp.encoders.get_preprocessing_fn(encoder_acrhitecture, weights)
+    preprocessing_fn(torch.randn(224, 224, 3))
+    print(f'exiting')
+    exit(-1)
+
+
+    loader_train, loader_valid = get_dataloaders(
                                         params['data_dir'], batch_size=params['batch_size'], 
                                         test_data_percentage=params['val_percentage'], 
                                         normalization=params['normalization'], 
@@ -99,9 +115,6 @@ def train(params):
                                         split_by_patient=params['split_by_patient'], 
                                         augment=params['augment']
                                     )
-    # unet = UNet()
-    unet = UNetWithResnet50Encoder()
-
     #state_dict = torch.load("src/trained_models/unet_model_time_2022-08-25 16:43:55.471303.pt")
     # unet.load_state_dict(state_dict['model_state_dict'])
     #unet.load_state_dict(state_dict)

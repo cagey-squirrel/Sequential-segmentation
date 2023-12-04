@@ -1,13 +1,13 @@
-from data_loading.data_loader import load_data, rename_files, info_dump, prepare_output_files, save_prediction_and_truth
+from src.data_loading.data_loader import get_dataloaders, rename_files, info_dump, prepare_output_files, save_prediction_and_truth
 from matplotlib import pyplot as plt
 from torch import nn, optim
 import torch
-from loss_and_metrics.dice_loss import DiceLoss 
-from loss_and_metrics.util import calculate_metrics_for_batch, add_new_metrics, average_metrics
+from src.loss_and_metrics.dice_loss import DiceLoss 
+from src.loss_and_metrics.util import calculate_metrics_for_batch, add_new_metrics, average_metrics
 import os
-from models.unet import UNet
+from src.models.unet import UNet
 from datetime import datetime
-from models.unet_resnext50 import UNetWithResnet50Encoder
+from src.models.unet_resnext50 import UNetWithResnet50Encoder
 
 def validation(unet, eval_data, device, loss_function, epoch_num, output_file, output_dir_path, params, ensembled_models):
 
@@ -65,7 +65,7 @@ def validation(unet, eval_data, device, loss_function, epoch_num, output_file, o
 
 def test_ensemble(params):
 
-    loader_train, loader_valid = load_data(
+    loader_train, loader_valid = get_dataloaders(
                                         params['data_dir'], batch_size=params['batch_size'], 
                                         test_data_percentage=params['val_percentage'], 
                                         normalization=params['normalization'], 

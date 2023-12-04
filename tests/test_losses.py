@@ -1,8 +1,8 @@
 import pytest
 import torch
-import segmentation_models_pytorch as smp
-import segmentation_models_pytorch.losses._functional as F
-from segmentation_models_pytorch.losses import (
+import my_segmentation_models_pytorch as smp
+import my_segmentation_models_pytorch.losses._functional as F
+from my_segmentation_models_pytorch.losses import (
     DiceLoss,
     JaccardLoss,
     SoftBCEWithLogitsLoss,

@@ -2,7 +2,7 @@ import numpy as np
 
 
 def preprocess_input(x, mean=None, std=None, input_space="RGB", input_range=None, **kwargs):
-
+    print(f'preprocess input = mean = {mean}, std = {std}, input_space = {input_space}, input_range = {input_range}, kwargs = {kwargs} \n')
     if input_space == "BGR":
         x = x[..., ::-1].copy()
 

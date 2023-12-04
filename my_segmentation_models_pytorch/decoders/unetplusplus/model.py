@@ -1,19 +1,19 @@
 from typing import Optional, Union, List
 
-from segmentation_models_pytorch.encoders import get_encoder
-from segmentation_models_pytorch.base import (
+from my_segmentation_models_pytorch.encoders import get_encoder
+from my_segmentation_models_pytorch.base import (
     SegmentationModel,
     SegmentationHead,
     ClassificationHead,
 )
-from .decoder import UnetDecoder
+from .decoder import UnetPlusPlusDecoder
 
 
-class Unet(SegmentationModel):
-    """Unet_ is a fully convolution neural network for image semantic segmentation. Consist of *encoder*
+class UnetPlusPlus(SegmentationModel):
+    """Unet++ is a fully convolution neural network for image semantic segmentation. Consist of *encoder*
     and *decoder* parts connected with *skip connections*. Encoder extract features of different spatial
-    resolution (skip connections) which are used by decoder to define accurate segmentation mask. Use *concatenation*
-    for fusing decoder blocks with skip connections.
+    resolution (skip connections) which are used by decoder to define accurate segmentation mask. Decoder of
+    Unet++ is more complex than in usual Unet.
 
     Args:
         encoder_name: Name of the classification model that will be used as an encoder (a.k.a backbone)
@@ -29,8 +29,8 @@ class Unet(SegmentationModel):
         decoder_use_batchnorm: If **True**, BatchNorm2d layer between Conv2D and Activation layers
             is used. If **"inplace"** InplaceABN will be used, allows to decrease memory consumption.
             Available options are **True, False, "inplace"**
-        decoder_attention_type: Attention module used in decoder of the model. Available options are
-            **None** and **scse** (https://arxiv.org/abs/1808.08127).
+        decoder_attention_type: Attention module used in decoder of the model.
+            Available options are **None** and **scse** (https://arxiv.org/abs/1808.08127).
         in_channels: A number of input channels for the model, default is 3 (RGB images)
         classes: A number of classes for output mask (or you can think as a number of channels of output mask)
         activation: An activation function to apply after the final convolution layer.
@@ -46,10 +46,10 @@ class Unet(SegmentationModel):
                     (could be **None** to return logits)
 
     Returns:
-        ``torch.nn.Module``: Unet
+        ``torch.nn.Module``: **Unet++**
 
-    .. _Unet:
-        https://arxiv.org/abs/1505.04597
+    Reference:
+        https://arxiv.org/abs/1807.10165
 
     """
 
@@ -68,6 +68,9 @@ class Unet(SegmentationModel):
     ):
         super().__init__()
 
+        if encoder_name.startswith("mit_b"):
+            raise ValueError("UnetPlusPlus is not support encoder_name={}".format(encoder_name))
+
         self.encoder = get_encoder(
             encoder_name,
             in_channels=in_channels,
@@ -75,7 +78,7 @@ class Unet(SegmentationModel):
             weights=encoder_weights,
         )
 
-        self.decoder = UnetDecoder(
+        self.decoder = UnetPlusPlusDecoder(
             encoder_channels=self.encoder.out_channels,
             decoder_channels=decoder_channels,
             n_blocks=encoder_depth,
@@ -96,5 +99,5 @@ class Unet(SegmentationModel):
         else:
             self.classification_head = None
 
-        self.name = "u-{}".format(encoder_name)
+        self.name = "unetplusplus-{}".format(encoder_name)
         self.initialize()

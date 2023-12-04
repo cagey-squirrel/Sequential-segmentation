@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torchvision
-resnet = torchvision.models.resnet.resnet50(pretrained=True)
+resnet = torchvision.models.resnet.resnet50(weights=torchvision.models.resnet.ResNet50_Weights.IMAGENET1K_V1)
 
 
 class ConvBlock(nn.Module):

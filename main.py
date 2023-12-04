@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 import json
-from training.train import train
-from training.ensemble_testing import test_ensemble
+from src.training.train import train
+from src.training.ensemble_testing import test_ensemble
 
 
 if __name__ == '__main__':

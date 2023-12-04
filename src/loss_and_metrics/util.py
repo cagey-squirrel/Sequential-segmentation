@@ -1,7 +1,7 @@
 import torch 
 import numpy as np
-from loss_and_metrics.hausdorff_distance import averaged_hausdorff_distance
-from loss_and_metrics.f_measure_metrics import intersection_over_union, dice, sensitivity, specificity, aoc
+from src.loss_and_metrics.hausdorff_distance import averaged_hausdorff_distance
+from src.loss_and_metrics.f_measure_metrics import intersection_over_union, dice, sensitivity, specificity, aoc
 
 
 def calculate_metrics_for_batch(predictions_batch, labels_batch, treshold=0.5):

@@ -4,7 +4,7 @@ import numpy as np
 
 # mock detection module
 sys.modules["torchvision._C"] = mock.Mock()
-import segmentation_models_pytorch as smp  # noqa
+import my_segmentation_models_pytorch as smp  # noqa
 
 
 def _test_preprocessing(inp, out, **params):

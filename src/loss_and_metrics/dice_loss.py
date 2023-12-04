@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from data_loading.data_loader import save_prediction_and_truth
+from src.data_loading.data_loader import save_prediction_and_truth
 
 
 class DiceLoss(nn.Module):

@@ -1,4 +1,4 @@
-import segmentation_models_pytorch as smp
+import my_segmentation_models_pytorch as smp
 
 encoders = smp.encoders.encoders
 
