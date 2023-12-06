@@ -118,7 +118,5 @@ def get_preprocessing_params(encoder_name, pretrained="imagenet"):
 
 
 def get_preprocessing_fn(encoder_name, pretrained="imagenet"):
-    print(f'get preprocess fn \n\n')
     params = get_preprocessing_params(encoder_name, pretrained=pretrained)
-    print(f'params = {params}')
     return functools.partial(preprocess_input, **params)

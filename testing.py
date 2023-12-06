@@ -5,6 +5,8 @@ from PIL import Image
 from collections import defaultdict
 from torchview import draw_graph
 import h5py
+from matplotlib import pyplot as plt
+
 
 def rename(data_dir):
 
@@ -116,12 +118,31 @@ def get_brats_data(path):
     max_val_img = float('-inf')
     max_val_mask = float('-inf')
 
-    for image_name in os.listdir(path):
+    for image_name in sorted(os.listdir(path)):
         image_path = os.path.join(path, image_name)
         #print(f'path = {path} image_name = {image_name} image_path = {image_path}\n')
         f = h5py.File(image_path, 'r') 
         image, mask = f['image'][()], f['mask'][()]
+        print(image.shape)
+        image = image[..., :-1]
+        if image.min() == image.max():
+            image *= 0
+        else:
+            image = (image - image.min()) / (image.max() - image.min())
         f.close()
+
+        total_mask = (mask != 0).sum()
+        mask *= 255
+        #image[image < 1e-3] = 0
+        print(image_name)
+        print(mask.shape)
+        total_non_zero = (mask != 0).sum()
+        total_mask = mask.shape[0] * mask.shape[1] * mask.shape[2]
+        print(f'filled {100*total_non_zero/total_mask}% where tnz = {total_non_zero} and total = {total_mask}')
+        fig, axis = plt.subplots(1, 2)
+        axis[0].imshow(image)
+        axis[1].imshow(mask)
+        plt.show()
 
         min_val_img = min(min_val_img, image.min())
         max_val_img = max(max_val_img, image.max())
@@ -154,7 +175,7 @@ test_data = True
 if test_data:
     data_dir = '/home/dzi/Documents/repos/brain_seg_data/kaggle_3m/'
     data_dir_cist = '/home/dzi/Documents/repos/kaggle_3m-cist/'
-    data_dir_brats = '/home/dzi/Documents/repos/archive/BraTS2020_training_data/content/data'
+    data_dir_brats = '/home/dzi/Documents/repos/archive/BraTS2020_training_data/content/data_small'
     #get_data_from_dir(data_dir)
     #get_data_from_dir(data_dir_cist)
     get_brats_data(data_dir_brats)
