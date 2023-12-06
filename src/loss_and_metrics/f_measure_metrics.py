@@ -18,11 +18,9 @@ def intersection_over_union(tp, fp, fn):
         - ratio (float): ratio between intersection and union in two sets
         - has_cancer (int): 1 if there is cancer on image, 0 if there is not
     '''
-    has_cancer = int((tp+fn) > 0)
-    # has_cancer = 1
     smooth = 1
     IoU = (tp + smooth) / (tp + fp + fn + smooth)
-    return (IoU * has_cancer, has_cancer)
+    return IoU
 
 
 def dice(tp, fp, fn):
@@ -39,62 +37,36 @@ def dice(tp, fp, fn):
         - ratio (float): dice score
         - has_cancer (int): 1 if there is cancer on image, 0 if there is not
     '''
-    has_cancer = int((tp+fn) > 0)
-    # has_cancer = 1
     smooth = 1
     dice_score = (2*tp + smooth) / (2*tp + fp + fn + smooth)
-    return (dice_score * has_cancer, has_cancer)
+    return dice_score
 
-def sensitivity(tp, fn):
+
+def precision(tp, fp):
     '''
-    Calculates sensitivity i.e. how many positives we found divided by how many positives there actually were
-    We only calculate and average the values for images where cancer truly exists
-    This images have sum of tp and fn greater than one
-    If image has no cancer then its metric should not be used when calculating average
-    Inputs:
-        -tp (int): number of true positives
-        -fn (int): number of false negatives
-    Returns:
-        - ratio (float): sensitivity
-        - has_cancer (int): 1 if there is cancer on image, 0 if there is not
+    Calculates precision 
+    How many cancer cells we correctly predicted vs how many we predicted in total
     '''
     smooth = 1
-    has_cancer = int((tp+fn) > 0)
-    # has_cancer = 1
-    sens = (tp + smooth) / (tp + fn + smooth)
-    return (sens * has_cancer, has_cancer)
+    sens = (tp + smooth) / (tp + fp + smooth)
+    return sens
 
-def specificity(tn, fp):
+
+def recall(tp, fn):
     '''
-    Calculates specificity i.e. how many negatives we found divided by how many negatives there actually were
-    Since negatives usually declare background in image segmentation problems, in cases such as ours where 
-    background takes up most of the image this metric should always have values close to 1
-    Inputs:
-        -tn (int): number of true negatives
-        -fp (int): number of false positives
-    Returns:
-        - ratio (float): specificity
-        - has_cancer (int): always returns 1 (since it is not important for this metric)
+    Calculated recall
+    How many cancer cells we correctly predicted vs how many there actually are
     '''
     smooth = 1
-    specificity = (tn + smooth) / (tn + fp + smooth)
-    has_cancer = 1
-    return (specificity, 1)
+    rec = (tp + smooth) / (tp + fn + smooth)
+    return rec
+
 
 # Area under the ROC curve:
-def aoc(tp, fp, fn, tn):
+def area_under_curve(tp, fp, fn, tn):
     '''
     Calculates the area under roc curve
-    Inputs:
-        -tp (int): number of true positives
-        -fp (int): number of false positives
-        -fn (int): number of false negatives
-        -tn (int): number of true negatives
-    Returns:
-        - ratio (float): area under ROC curve
-        - has_cancer (int): always returns 1 (since it is not important for this metric)
     '''
     smooth = 1
-    has_cancer = 1
-    aoc = 1 - 1/2 * (fp / (fp + tn + smooth) + fn / (fn + tp + smooth))
-    return (aoc, 1)
+    auc = 1 - 1/2 * (fp / (fp + tn + smooth) + fn / (fn + tp + smooth))
+    return auc
