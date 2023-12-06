@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from src.data_loading.data_loader import save_prediction_and_truth
+from src.data_loading.util import save_prediction_and_truth
 
 
 class DiceLoss(nn.Module):
@@ -259,14 +259,11 @@ def basic_dice_loss(y_pred, y_true, loss_track_parameters):
     losses = []
     smooth = 1.
 
-    #y_pred = y_pred.squeeze()
-    y_true = y_true[:, None, :, :]
-    #assert y_pred.size() == y_true.size()
     batch_size = y_true.shape[0]
     batch_loss = 0
     all_metrics = []
     for i in range(batch_size):
-        
+
         # Probabilities of pixel being a cancer cell
         predictions_probabilities = y_pred[i].flatten()
 
