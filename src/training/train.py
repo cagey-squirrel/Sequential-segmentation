@@ -125,7 +125,7 @@ def validation(unet, eval_data, device, loss_function, epoch_num, output_file, o
     info_dump(total_loss, metrics, epoch_num, output_file, 'valid')
 
 
-def train(params):
+def train(params, split_seed=1302):
 
     torch.manual_seed(1302)
     torch.cuda.manual_seed(1302)
@@ -152,7 +152,8 @@ def train(params):
                                         test_data_percentage=params['val_percentage'], 
                                         ensemble=params['ensemble'], 
                                         split_by_patient=params['split_by_patient'], 
-                                        augment=params['augment'], shuffle_training=params['shuffle_training']
+                                        augment=params['augment'], shuffle_training=params['shuffle_training'],
+                                        split_seed=split_seed
                                     )
     #state_dict = torch.load("src/trained_models/unet_model_time_2022-08-25 16:43:55.471303.pt")
     # unet.load_state_dict(state_dict['model_state_dict'])

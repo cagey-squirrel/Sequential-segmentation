@@ -26,7 +26,7 @@ def ensemble_data(training_data):
     return sampled_training_data
 
 
-def split_data_train_test(data, test_data_percentage, ensemble, split_by_patient):
+def split_data_train_test(data, test_data_percentage, ensemble, split_by_patient, split_seed):
     '''
     Splits data into training and test datasets
     Preprocesses data
@@ -42,7 +42,7 @@ def split_data_train_test(data, test_data_percentage, ensemble, split_by_patient
         test_data_len = int(data_len / 100 * test_data_percentage)
         train_data_len = data_len - test_data_len
 
-        train_data, test_data = random_split(data, (train_data_len, test_data_len), generator=Generator().manual_seed(1302))
+        train_data, test_data = random_split(data, (train_data_len, test_data_len), generator=Generator().manual_seed(split_seed))
         
         # Data is grouped by patient
         # Now that we split data into train and test datasets by patient

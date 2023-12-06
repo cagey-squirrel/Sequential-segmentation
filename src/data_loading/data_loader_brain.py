@@ -15,7 +15,7 @@ from src.data_loading.util import crop_square, split_data_train_test
 
 
 
-def get_brain_dataloaders(data_dir, batch_size, test_data_percentage, ensemble, split_by_patient, augment, shuffle_training):
+def get_brain_dataloaders(data_dir, batch_size, test_data_percentage, ensemble, split_by_patient, augment, shuffle_training, split_seed):
     '''
     Loads images from data_dir
     Inputs:
@@ -25,13 +25,13 @@ def get_brain_dataloaders(data_dir, batch_size, test_data_percentage, ensemble, 
     Returns:
         -Dataloader instances for training and test dataset
     '''
-    torch.manual_seed(130299)
+    torch.manual_seed(1302)
 
     all_data = get_brain_data(data_dir)
     #all_data = preprocess_data(all_data)
     
     
-    training_data, testing_data = split_data_train_test(all_data, test_data_percentage, ensemble, split_by_patient)
+    training_data, testing_data = split_data_train_test(all_data, test_data_percentage, ensemble, split_by_patient, split_seed)
 
     training_dataset = BrainCancerDataset(training_data)
     testing_dataset = BrainCancerDataset(testing_data)
