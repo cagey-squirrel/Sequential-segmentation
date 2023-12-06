@@ -142,7 +142,7 @@ def train(params, split_seed=1302):
         get_dataloaders = get_brain_dataloaders
         input_channels = 3
 
-    encoder_acrhitecture = 'resnet50' 
+    encoder_acrhitecture = params['encoder_acrhitecture']
     weights = 'imagenet'
     unet = SmpUnet(encoder_acrhitecture, input_channels, 1, weights=weights)
     #preprocess_fn = smp.encoders.get_preprocessing_fn(encoder_acrhitecture, weights)
