@@ -124,6 +124,9 @@ def validation(unet, eval_data, device, loss_function, epoch_num, output_file, o
     metrics = calculate_metrics(tp_fp_fn_tn)
     info_dump(total_loss, metrics, epoch_num, output_file, 'valid')
 
+    dice_score = metrics[1]
+    return dice_score
+
 
 def train(params, split_seed=1302):
 
@@ -170,18 +173,24 @@ def train(params, split_seed=1302):
 
     output_dir_path, train_output_text_file, test_output_text_file = prepare_output_files(params)
     
-    trained_model_dir = os.path.join(params['trained_models_path'], f"trained_models_{str(datetime.now())}.pt")
+    trained_model_dir = os.path.join(params['trained_models_path'], f"trained_models_{str(datetime.now())[-6:]}.pt")
     os.mkdir(trained_model_dir)
 
-    save_period = 100
+    max_dice_score = 0
+    epoch = 0
+    patience = params["patience"]
+    no_progress_epochs = 0
+    best_model_state = None
 
-    for epoch in range(num_epochs):
+    while epoch != num_epochs:
+
         start = time()
-        validation(unet, loader_valid, device, loss_function, epoch, test_output_text_file, output_dir_path, params)
-        #print(f'Validation finished in {time() - start} seconds \n\n')
-        start = time()
+        current_dice_score = validation(unet, loader_valid, device, loss_function, epoch, test_output_text_file, output_dir_path, params)
         training(unet, loader_train, device, optimizer, loss_function, epoch, train_output_text_file, output_dir_path, params)
-        print(f'Training finished in {time() - start} seconds \n\n')
+        print(f'Epoch finished in {time() - start} seconds \n\n')
+
+
+        # Learning rate optimization----------------------------------------------
         if epoch == 2:
             optimizer.param_groups[0]['lr'] = optimizer.param_groups[0]['lr'] / 10
             print("Lowered lr")
@@ -189,10 +198,22 @@ def train(params, split_seed=1302):
         if epoch == 50:
             optimizer.param_groups[0]['lr'] = optimizer.param_groups[0]['lr'] / 10
             print("Lowered lr")
+        #-------------------------------------------------------------------------
+
+
+        # Checking if no progress was made in last 'patience' epochs--------------
+        if current_dice_score > max_dice_score:
+            best_model_state = unet.state_dict()
+            max_dice_score = current_dice_score
+            no_progress_epochs = 0
+        else:
+            no_progress_epochs += 1
         
-        
-   
-        if (epoch + 1) % save_period == 0:
-            torch.save(unet.state_dict(), os.path.join(trained_model_dir, f"unet_model__{(epoch + 1)//save_period}.pt"))
+        if no_progress_epochs >= patience:
+            break
+        # ------------------------------------------------------------------------
+
+        epoch += 1
     
+    torch.save(best_model_state, os.path.join(trained_model_dir, f"best_model.pt"))
     # torch.save(unet.state_dict(), os.path.join(params['trained_models_path'], f"unet_model_time_{str(datetime.now())}.pt"))
