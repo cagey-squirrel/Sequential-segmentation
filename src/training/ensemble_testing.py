@@ -1,23 +1,30 @@
-from src.data_loading.data_loader import get_dataloaders, rename_files, info_dump, prepare_output_files, save_prediction_and_truth
+from src.data_loading.data_loader_brats import get_brats_dataloaders
+from src.data_loading.data_loader_brain import get_brain_dataloaders
+
+from src.data_loading.util import rename_files, info_dump, prepare_output_files, save_prediction_and_truth
 from matplotlib import pyplot as plt
 from torch import nn, optim
 import torch
 from src.loss_and_metrics.dice_loss import DiceLoss 
-from src.loss_and_metrics.util import calculate_metrics_for_batch, add_new_metrics, average_metrics
+from src.loss_and_metrics.util import calculate_metrics, get_batch_tp_fp_fn_tn
 import os
 from src.models.unet import UNet
 from datetime import datetime
 from src.models.unet_resnext50 import UNetWithResnet50Encoder
+import numpy as np
+
 
 def validation(unet, eval_data, device, loss_function, epoch_num, output_file, output_dir_path, params, ensembled_models):
 
     num_ensembled_models = len(ensembled_models)
 
     num_epochs = params['num_epochs']
-    metrics = [[[0, 0] for _ in range(6)] for _ in range(num_ensembled_models )]
+   
     total_loss = [0 for _ in range(num_ensembled_models )]
     output_valid_path = os.path.join(output_dir_path, 'valid')                                                                                                                                    
 
+    tp_fp_fn_tn = np.zeros((num_ensembled_models, 4))
+    total_slices = 0
 
     with torch.set_grad_enabled(False):
         
@@ -40,30 +47,26 @@ def validation(unet, eval_data, device, loss_function, epoch_num, output_file, o
                 loss_track_parameters = dirname, inputs, names, epoch_num, num_epochs, "valid", j, params['probability_treshold'], params['bce_pos_weight']
 
                 loss = loss_function(predictions, labels, loss_track_parameters)
-                new_metrics = calculate_metrics_for_batch(predictions, labels, params['probability_treshold'])
 
+                tp_fp_fn_tn[i] += get_batch_tp_fp_fn_tn(predictions, labels, params['probability_treshold'])
                 total_loss[i] += loss.item()
-                add_new_metrics(metrics[i], new_metrics)
+                total_slices += labels.shape[0]
+              
 
-                #averaged_predictor += predictions
-            
-            #averaged_predictor /= num_ensembled_models
-            #dirname = os.path.join(output_valid_path, "ensembled")
-            #loss_track_parameters = dirname, inputs, names, epoch_num, num_epochs, "valid", j, params['probability_treshold'], params['bce_pos_weight']
-
-            #loss = loss_function(averaged_predictor, labels, loss_track_parameters)
-            #new_metrics = calculate_metrics_for_batch(averaged_predictor, labels, params['probability_treshold'])
-
-            #total_loss[num_ensembled_models] += loss.item()
-            #add_new_metrics(metrics[num_ensembled_models], new_metrics)
-    
     for i, loss_val in enumerate(total_loss):
-        metrics[i] = average_metrics(metrics[i])
+        tp_fp_fn_tn[i] /= total_slices
         total_loss[i] /= len(eval_data)
   
-        info_dump(total_loss[i], metrics[i], epoch_num, output_file, 'valid')
+        info_dump(total_loss[i], tp_fp_fn_tn[i], epoch_num, output_file, 'valid')
+
 
 def test_ensemble(params):
+
+
+    if params['dataset_type'] == 'brats':
+        get_dataloaders = get_brats_dataloaders
+    elif params['dataset_type'] == 'brain':
+        get_dataloaders = get_brain_dataloaders
 
     loader_train, loader_valid = get_dataloaders(
                                         params['data_dir'], batch_size=params['batch_size'], 
