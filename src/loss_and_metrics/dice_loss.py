@@ -64,18 +64,18 @@ def background_dice(y_pred, y_true, loss_track_parameters):
         loss = (cancer_loss + background_loss) / 2
         batch_loss += loss
 
-        if image_num < 3:
+        if image_num < 3 and (epoch % 20) == 0:
             losses.append(loss)
         elif mode == "valid" and epoch == num_epochs - 1:
             losses.append(loss)
     
-    if image_num < 3:
+    if image_num < 3 and (epoch % 20) == 0:
         # save_prediction_and_truth(path, inputs, y_pred, y_true, epoch_no, losses, image_num)
         save_prediction_and_truth(loss_track_parameters, losses, y_pred, y_true)
         #print(f"cancer loss = {cancer_loss}")
         #print(f"background loss = {background_loss}")
     elif mode == "valid" and epoch == num_epochs - 1:
-          save_prediction_and_truth(loss_track_parameters, losses, y_pred, y_true)
+        save_prediction_and_truth(loss_track_parameters, losses, y_pred, y_true)
 
     individual_dsc_loss = batch_loss / batch_size                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
     return individual_dsc_loss

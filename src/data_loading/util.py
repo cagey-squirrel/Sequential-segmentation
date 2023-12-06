@@ -105,7 +105,7 @@ def info_dump(total_loss, metrics, epoch_num, output_file, mode):
 def prepare_output_files(params):
 
     output_path = params['output_path']
-    directory_name = os.path.join(output_path, "output_folder_at_time=_" + str(datetime.now()))
+    directory_name = os.path.join(output_path, "output_folder_at_time=_" + str(datetime.now())[-6:])
 
     os.mkdir(directory_name)
 
