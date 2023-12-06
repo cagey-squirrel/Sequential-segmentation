@@ -143,8 +143,9 @@ def train(params, split_seed=1302):
         input_channels = 3
 
     encoder_acrhitecture = params['encoder_acrhitecture']
+    attention = params['attention']
     weights = 'imagenet'
-    unet = SmpUnet(encoder_acrhitecture, input_channels, 1, weights=weights)
+    unet = SmpUnet(encoder_acrhitecture, input_channels, 1, weights=weights, attention=attention)
     #preprocess_fn = smp.encoders.get_preprocessing_fn(encoder_acrhitecture, weights)
 
     loader_train, loader_valid = get_dataloaders(
@@ -181,7 +182,7 @@ def train(params, split_seed=1302):
         start = time()
         training(unet, loader_train, device, optimizer, loss_function, epoch, train_output_text_file, output_dir_path, params)
         print(f'Training finished in {time() - start} seconds \n\n')
-        if epoch == 3:
+        if epoch == 2:
             optimizer.param_groups[0]['lr'] = optimizer.param_groups[0]['lr'] / 10
             print("Lowered lr")
         

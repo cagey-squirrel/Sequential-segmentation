@@ -27,7 +27,7 @@ from copy import deepcopy
 import torch.nn as nn
 
 from torchvision.models.resnet import ResNet
-from torchvision.models.resnet import BasicBlock
+from torchvision.models.resnet import BasicBlock, SCSEBlock
 from torchvision.models.resnet import Bottleneck
 from pretrainedmodels.models.torchvision_models import pretrained_settings
 
@@ -139,6 +139,15 @@ resnet_encoders = {
         "params": {
             "out_channels": (3, 64, 64, 128, 256, 512),
             "block": BasicBlock,
+            "layers": [3, 4, 6, 3],
+        },
+    },
+    "resnet34-scse": {
+        "encoder": ResNetEncoder,
+        "pretrained_settings": pretrained_settings["resnet34"],
+        "params": {
+            "out_channels": (3, 64, 64, 128, 256, 512),
+            "block": SCSEBlock,
             "layers": [3, 4, 6, 3],
         },
     },
