@@ -99,7 +99,7 @@ def get_brain_data(data_dir):
                 scan -= 0.5
                 #scan /= 2
                 scan = np.transpose(scan, (2, 0, 1))
-                scan = torch.tensor(scan)
+                scan = torch.tensor(scan, dtype=torch.float)
 
                 current_img_pair.append(scan)
                 image_is_next = False
