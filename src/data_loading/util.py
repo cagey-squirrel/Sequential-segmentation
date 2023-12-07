@@ -102,10 +102,10 @@ def info_dump(total_loss, metrics, epoch_num, output_file, mode):
     print(short_info)
 
 
-def prepare_output_files(params):
+def prepare_output_files(params, folder_name):
 
     output_path = params['output_path']
-    directory_name = os.path.join(output_path, "output_folder_at_time=_" + str(datetime.now())[-6:])
+    directory_name = os.path.join(output_path, folder_name + '_' + str(datetime.now())[-6:])
 
     os.mkdir(directory_name)
 
@@ -128,29 +128,32 @@ def prepare_output_files(params):
 
 
 # Saves the picture of input MRI, model prediction and true label to location from path
-def save_prediction_and_truth(loss_track_parameters, losses, y_pred, y_true):
- 
-    path, x, names, epoch, num_epochs, mode, image_num, treshold, bce_pos_weight = loss_track_parameters
-    figure, axis = plt.subplots(2, 2)
+def save_prediction_and_truth(inputs, y_pred, y_true, path, names, epoch_num, batch_index, mode):
+    
+    if mode == "validation":
+        if not ((epoch_num % 100 == 0) or ((epoch_num % 20 == 0) and batch_index < 3)):
+            return 
+    if mode == 'training':
+        if not ((epoch_num % 20 == 0) and batch_index < 3):
+            return
 
+    figure, axis = plt.subplots(1, 3)
     num_iter = min(y_true.shape[0], 8)
     
     for i in range(num_iter):
-        loss = losses[i].item()
+
         name = names[i]
 
-        local_x = x.detach().cpu().numpy()[i,0,:,:]
+        local_inputs = inputs.detach().cpu().numpy()[i,0,:,:]
         local_y_pred = y_pred.detach().cpu().numpy()[i,0,:,:]
-        local_y_pred_divided = local_y_pred >= treshold
         local_y_true = y_true.detach().cpu().numpy()[i,0,:,:]
         
         plt.title(name, loc='right')
-        axis[0, 0].imshow(local_x)
-        axis[0, 1].imshow(local_y_pred)
-        axis[1, 0].imshow(local_y_pred_divided)
-        axis[1, 1].imshow(local_y_true)
-        num = image_num * y_true.shape[0] + i
-        plt.savefig(path + f'/epoch_{epoch}__image_{num}__loss_{round(loss,4)}.jpg')
+        axis[0].imshow(local_inputs)
+        axis[1].imshow(local_y_pred)
+        axis[2].imshow(local_y_true)
+        num = batch_index * y_true.shape[0] + i
+        plt.savefig(path + f'/image_{num}_loss.jpg')
         plt.cla()
     plt.close()
     #plt.show()
