@@ -1,12 +1,13 @@
 import torch 
 import numpy as np
-from src.loss_and_metrics.hausdorff_distance import averaged_hausdorff_distance
 from src.loss_and_metrics.f_measure_metrics import intersection_over_union, dice, precision, recall, area_under_curve
 
 
-def get_batch_tp_fp_fn_tn(predictions, labels, treshold, device):
+def get_batch_metrics(predictions, labels, treshold, device):
     '''
-    Calculates tp, fp, fn and tn metrics for a batch
+    Calculates metrics for a batch
+    Metrics calculated are: IoU, dice score, precision, recall, AuC
+    Returns these metrics as pytorch tensor
     Inputs:
         -predictions (pytorch tensor): tensor representing image segmentation with shape (image_heigh, image_width)
             each value in tensor represents the possibility that that pixel is a cancer cell
@@ -15,27 +16,34 @@ def get_batch_tp_fp_fn_tn(predictions, labels, treshold, device):
         -treshold (float): defines a treshold used to find cancer cells: all pixels in tensor predictions which have 
             a higher value than treshold are declared cancer cells
     '''
-    predictions_probabilities = predictions.flatten()
-    true_labels = labels.flatten()
 
-    predicted_true = predictions_probabilities > treshold
-    predicted_false = torch.logical_not(predicted_true)
-    labeled_true = true_labels
-    labeled_false = torch.logical_not(labeled_true)
+    tp, fp, fn, tn = calculate_tp_fp_fn_tn(predictions, labels, treshold)
+    metrics = calculate_metrics(tp, fp, fn, tn)
+
+    metrics = metrics.sum(1)
+    return metrics
     
-    tp = (predicted_true * labeled_true).sum()
-    fp = (predicted_true * labeled_false).sum()
-    fn = (predicted_false * labeled_true).sum()
-    tn = (predicted_false * labeled_false).sum()
 
-    return torch.tensor([tp, fp, fn, tn], device=device)
+def calculate_tp_fp_fn_tn(predictions, labels, treshold):
+
+    predicted_true = predictions > treshold
+    predicted_false = torch.logical_not(predicted_true)
+    labeled_true = labels
+    labeled_false = torch.logical_not(labeled_true)
+
+    tp = (predicted_true * labeled_true).sum(axis=(1, 2, 3))
+    fp = (predicted_true * labeled_false).sum(axis=(1, 2, 3))
+    fn = (predicted_false * labeled_true).sum(axis=(1, 2, 3))
+    tn = (predicted_false * labeled_false).sum(axis=(1, 2, 3))
+
+    return tp, fp, fn, tn
 
 
-def calculate_metrics(tp_fp_fn_tn):
+def calculate_metrics(tp, fp, fn, tn):
     '''
     Calculates IoU, dice score, precision, recall, AuC
+    Returns them in a tensor
     '''
-    tp, fp, fn, tn = tp_fp_fn_tn
 
     iou = intersection_over_union(tp, fp, fn)
     dice_score = dice(tp, fp, fn)
@@ -43,5 +51,5 @@ def calculate_metrics(tp_fp_fn_tn):
     rec = recall(tp, fn)
     auc = area_under_curve(tp, fp, fn, tn)
     
-    return iou, dice_score, prec, rec, auc
+    return torch.stack([iou, dice_score, prec, rec, auc])
 
