@@ -1,127 +1,82 @@
 from src.data_loading.data_loader_brats import get_brats_dataloaders
 from src.data_loading.data_loader_brain import get_brain_dataloaders
 
-from src.data_loading.util import rename_files, info_dump, prepare_output_files, save_prediction_and_truth
-from matplotlib import pyplot as plt
-from torch import nn, optim
-import torch
 from src.loss_and_metrics.dice_loss import DiceLoss 
-from src.loss_and_metrics.util import get_batch_tp_fp_fn_tn, calculate_metrics
-import os
-from src.models.unet import UNet
-from datetime import datetime
-from src.models.unet_resnext50 import UNetWithResnet50Encoder
+from src.loss_and_metrics.util import get_batch_metrics
+
+import torch
 from src.models.smp_unet import SmpUnet
-import sys
-sys.path.append("...") # Adds higher directory to python modules path.
-import my_segmentation_models_pytorch as smp 
+
+from src.data_loading.util import info_dump, prepare_output_files, save_prediction_and_truth
+from matplotlib import pyplot as plt
+
+from datetime import datetime
 from time import time
 import numpy as np
 import random
+import os
+import sys
+sys.path.append("...") # Adds higher directory to python modules path.
 
 
-def training(unet, training_data, device, optimizer, loss_function, epoch_num, output_file, output_dir_path, params):
+def training(unet, training_data, device, optimizer, loss_function, epoch_num, output_file, output_train_path, params):
     unet.train()
 
-    num_epochs = params['num_epochs']
     total_loss = 0
-    tp_fp_fn_tn = torch.zeros(4, device=device)
-    total_slices = 0
-    
-    total_time_spent_on_predicting = 0
-    total_time_spent_on_loss = 0
-    total_time_spent_on_step = 0
-    total_time_spent_on_backward = 0
-    total_time_spent_on_adding_metrics = 0
-
-    output_train_path = os.path.join(output_dir_path, 'train')                                                                                                                                    
+    metrics = torch.zeros(5, device=device)
+    total_slices = 0                                                                                                                                   
     epoch_path = os.path.join(output_train_path, str(epoch_num))
     os.mkdir(epoch_path)
 
     with torch.set_grad_enabled(True):
-        for i, data in enumerate(training_data):
-            inputs, labels, names = data
-
-            inputs, labels = inputs.to(device), labels.to(device)
-            
-            
-            # inputs = inputs[:,None,:,:]
-            # labels = labels[:,None,:,:]
-
+        for batch_index, data in enumerate(training_data):
             optimizer.zero_grad()
 
-            start_predicting = time()
-            predictions = unet(inputs.float())
-            total_time_spent_on_predicting += time() - start_predicting
+            inputs, labels, names = data
+            inputs, labels = inputs.to(device), labels.to(device)
+            predictions = unet(inputs)
 
-            start_predicting = time()
-            loss_track_parameters = epoch_path, inputs, names, epoch_num, num_epochs, "train", i, params['probability_treshold'], params['bce_pos_weight']
-            loss = loss_function(predictions, labels, loss_track_parameters)
-            total_time_spent_on_loss += time() - start_predicting
-
-            start_predicting = time()
+            loss = loss_function(predictions, labels)
             loss.backward()
-            total_time_spent_on_backward += time() - start_predicting
-
-            start_predicting = time()
             optimizer.step()
             total_loss += loss.item()
-            total_time_spent_on_step += time() - start_predicting
 
-            start_predicting = time()
-            tp_fp_fn_tn += get_batch_tp_fp_fn_tn(predictions, labels, params['probability_treshold'], device)
-            total_time_spent_on_adding_metrics += time() - start_predicting
+            metrics += get_batch_metrics(predictions, labels, params['probability_treshold'], device)
             total_slices += labels.shape[0]
 
-            #print(names)
-            #print(loss.item())
-            #if i == 2:
-            #    exit(-1)
+            save_prediction_and_truth(inputs, predictions, labels, epoch_path, names, epoch_num, batch_index, "training")
 
-            
-    tp_fp_fn_tn /= total_slices
     total_loss /= len(training_data)
-    metrics = calculate_metrics(tp_fp_fn_tn)
+    metrics /= total_slices
     info_dump(total_loss, metrics, epoch_num, output_file, 'train')
-    #print(f'Total time predicting in infodump = {time() - start_predicting}')
-#
-    #print(f'Total time predicting in training = {total_time_spent_on_predicting}')
-    #print(f'Total time predicting in loss = {total_time_spent_on_loss}')
-    #print(f'Total time predicting in metrics = {total_time_spent_on_adding_metrics}')
-    #print(f'Total time predicting in backward = {total_time_spent_on_backward}')
-    #print(f'Total time predicting in step = {total_time_spent_on_step}')
 
 
-def validation(unet, eval_data, device, loss_function, epoch_num, output_file, output_dir_path, params):
+def validation(unet, eval_data, device, loss_function, epoch_num, output_file, output_valid_path, params):
     unet.eval()
 
-    num_epochs = params['num_epochs']
-    tp_fp_fn_tn = torch.zeros(4, device=device)
+    metrics = torch.zeros(5, device=device)
     total_slices = 0
-    output_valid_path = os.path.join(output_dir_path, 'valid')                                                                                                                                    
+                                                                                                                                     
     epoch_path = os.path.join(output_valid_path, str(epoch_num))
     os.mkdir(epoch_path)
 
     with torch.set_grad_enabled(False):
         total_loss = 0
-        for i, data in enumerate(eval_data):
+        for batch_index, data in enumerate(eval_data):
+
             inputs, labels, names = data
-
             inputs, labels = inputs.to(device), labels.to(device)
-
-            predictions = unet(inputs.float())
+            predictions = unet(inputs)
             
-            loss_track_parameters = epoch_path, inputs, names, epoch_num, num_epochs, "valid", i, params['probability_treshold'], params['bce_pos_weight']
-
-            loss = loss_function(predictions, labels, loss_track_parameters)
-            tp_fp_fn_tn += get_batch_tp_fp_fn_tn(predictions, labels, params['probability_treshold'], device)
+            loss = loss_function(predictions, labels)
+            metrics += get_batch_metrics(predictions, labels, params['probability_treshold'], device)
             total_slices += labels.shape[0]
-
             total_loss += loss.item()
 
-    tp_fp_fn_tn /= total_slices
+            save_prediction_and_truth(inputs, predictions, labels, epoch_path, names, epoch_num, batch_index, "validation")
+    
     total_loss /= len(eval_data)
-    metrics = calculate_metrics(tp_fp_fn_tn)
+    metrics /= total_slices
     info_dump(total_loss, metrics, epoch_num, output_file, 'valid')
 
     dice_score = metrics[1]
@@ -165,15 +120,18 @@ def train(params, split_seed=1302):
 
     num_epochs = params['num_epochs']
                                                                                                     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")                                                                                                                             
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")                                                                                                                             
     unet.to(device)
     
-    optimizer = optim.Adam(unet.parameters(), lr=params['learning_rate'], weight_decay=params['regularization'])
+    optimizer = torch.optim.Adam(unet.parameters(), lr=params['learning_rate'], weight_decay=params['regularization'])
     loss_function = DiceLoss()
 
-    output_dir_path, train_output_text_file, test_output_text_file = prepare_output_files(params)
+    folder_name = 'resnet34'
+    output_dir_path, train_output_text_file, test_output_text_file = prepare_output_files(params, folder_name)
+    output_valid_path = os.path.join(output_dir_path, 'valid')   
+    output_train_path = os.path.join(output_dir_path, 'train')   
     
-    trained_model_dir = os.path.join(params['trained_models_path'], f"trained_models_{str(datetime.now())[-6:]}.pt")
+    trained_model_dir = os.path.join(params['trained_models_path'], f"{folder_name}_{str(datetime.now())[-6:]}.pt")
     os.mkdir(trained_model_dir)
 
     max_dice_score = 0
@@ -181,17 +139,18 @@ def train(params, split_seed=1302):
     patience = params["patience"]
     no_progress_epochs = 0
     best_model_state = None
+    save_period = 100
 
     while epoch != num_epochs:
 
         start = time()
-        current_dice_score = validation(unet, loader_valid, device, loss_function, epoch, test_output_text_file, output_dir_path, params)
-        training(unet, loader_train, device, optimizer, loss_function, epoch, train_output_text_file, output_dir_path, params)
+        current_dice_score = validation(unet, loader_valid, device, loss_function, epoch, test_output_text_file, output_valid_path, params)
+        training(unet, loader_train, device, optimizer, loss_function, epoch, train_output_text_file, output_train_path, params)
         print(f'Epoch finished in {time() - start} seconds \n\n')
 
 
         # Learning rate optimization----------------------------------------------
-        if epoch == 2:
+        if epoch == 3:
             optimizer.param_groups[0]['lr'] = optimizer.param_groups[0]['lr'] / 10
             print("Lowered lr")
         
@@ -212,6 +171,13 @@ def train(params, split_seed=1302):
         if no_progress_epochs >= patience:
             break
         # ------------------------------------------------------------------------
+
+
+        # Occasionally saving the model so we dont have to wait for it to finish
+        if (epoch + 1) % save_period == 0:
+            torch.save(best_model_state, os.path.join(trained_model_dir, f"model_{(epoch + 1) // save_period}.pt"))
+        # ------------------------------------------------------------------------
+
 
         epoch += 1
     

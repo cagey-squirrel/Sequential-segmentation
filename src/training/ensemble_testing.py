@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 from torch import nn, optim
 import torch
 from src.loss_and_metrics.dice_loss import DiceLoss 
-from src.loss_and_metrics.util import calculate_metrics, get_batch_tp_fp_fn_tn
+from src.loss_and_metrics.util import get_batch_metrics
 import os
 from src.models.unet import UNet
 from datetime import datetime
@@ -23,41 +23,34 @@ def validation(unet, eval_data, device, loss_function, epoch_num, output_file, o
     total_loss = [0 for _ in range(num_ensembled_models )]
     output_valid_path = os.path.join(output_dir_path, 'valid')                                                                                                                                    
 
-    tp_fp_fn_tn = np.zeros((num_ensembled_models, 4))
+    metrics = np.zeros((num_ensembled_models, 5))
     total_slices = 0
 
     with torch.set_grad_enabled(False):
         
         for j, data in enumerate(eval_data):
-            inputs, labels, names = data
 
+            inputs, labels, names = data
             inputs, labels = inputs.to(device), labels.to(device)
 
-            #inputs = inputs[:,None,:,:]
-            #labels = labels[:,None,:,:]
-
-            #averaged_predictor = torch.zeros(labels.shape).to(device)
-
             for i, ensemble_model in enumerate(ensembled_models):
+
                 ensemble_model.to(device)
                 ensemble_model.eval()
                 predictions = ensemble_model(inputs.float())
-            
-                dirname = dirname = os.path.join(output_valid_path, str(i))
-                loss_track_parameters = dirname, inputs, names, epoch_num, num_epochs, "valid", j, params['probability_treshold'], params['bce_pos_weight']
 
-                loss = loss_function(predictions, labels, loss_track_parameters)
+                loss = loss_function(predictions, labels)
 
-                tp_fp_fn_tn[i] += get_batch_tp_fp_fn_tn(predictions, labels, params['probability_treshold'])
+                metrics[i] += get_batch_metrics(predictions, labels, params['probability_treshold'])
                 total_loss[i] += loss.item()
                 total_slices += labels.shape[0]
               
 
     for i, loss_val in enumerate(total_loss):
-        tp_fp_fn_tn[i] /= total_slices
+        metrics[i] /= total_slices
         total_loss[i] /= len(eval_data)
   
-        info_dump(total_loss[i], tp_fp_fn_tn[i], epoch_num, output_file, 'valid')
+        info_dump(total_loss[i], metrics[i], epoch_num, output_file, 'valid')
 
 
 def test_ensemble(params):
