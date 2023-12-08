@@ -117,13 +117,18 @@ class Activation(nn.Module):
 
 
 class Attention(nn.Module):
-    def __init__(self, name, **params):
+    def __init__(self, name, attention_oder='', **params):
         super().__init__()
 
         if name is None:
             self.attention = nn.Identity(**params)
         elif name == "scse":
             self.attention = SCSEModule(**params)
+        elif name == "single-scse":  # For single scse we only apply attention to second layer
+            if attention_oder == 'first':
+                self.attention = nn.Identity(**params)
+            elif attention_oder == 'second':
+                self.attention = SCSEModule(**params)
         else:
             raise ValueError("Attention {} is not implemented".format(name))
 

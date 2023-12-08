@@ -22,7 +22,7 @@ class DecoderBlock(nn.Module):
             padding=1,
             use_batchnorm=use_batchnorm,
         )
-        self.attention1 = md.Attention(attention_type, in_channels=in_channels + skip_channels)
+        self.attention1 = md.Attention(attention_type, in_channels=in_channels + skip_channels, attention_oder='first')
         self.conv2 = md.Conv2dReLU(
             out_channels,
             out_channels,
@@ -30,7 +30,7 @@ class DecoderBlock(nn.Module):
             padding=1,
             use_batchnorm=use_batchnorm,
         )
-        self.attention2 = md.Attention(attention_type, in_channels=out_channels)
+        self.attention2 = md.Attention(attention_type, in_channels=out_channels, attention_oder='second')
 
     def forward(self, x, skip=None):
         x = F.interpolate(x, scale_factor=2, mode="nearest")
