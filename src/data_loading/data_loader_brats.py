@@ -7,10 +7,10 @@ import os
 import random
 from src.data_loading.augmentors import augment_images
 import h5py
-from src.data_loading.util import crop_square, split_data_train_test
+from src.data_loading.util import crop_square, split_data_train_test, merge_patient_data
 
 
-def get_brats_dataloaders(data_dir, batch_size, test_data_percentage, ensemble, split_by_patient, augment, shuffle_training, split_seed):
+def get_brats_dataloaders(data_dir, batch_size, test_data_percentage, ensemble, split_by_patient, augment, shuffle_training, split_seed, channels):
     '''
     Dataloader for BRATS2020 dataset
     Inputs:
@@ -25,7 +25,7 @@ def get_brats_dataloaders(data_dir, batch_size, test_data_percentage, ensemble, 
     all_data_paths = get_all_data_paths_brats(data_dir)
     
     training_data, testing_data = split_data_train_test(all_data_paths, test_data_percentage, ensemble, split_by_patient, split_seed)
-
+    training_data, testing_data = merge_patient_data(training_data, testing_data)
     training_dataset = BRATSDataset(training_data)
     testing_dataset = BRATSDataset(testing_data)
 
