@@ -8,6 +8,8 @@ from my_segmentation_models_pytorch.base import (
 )
 from .decoder import UnetDecoder
 
+import torch
+
 
 class Unet(SegmentationModel):
     """Unet_ is a fully convolution neural network for image semantic segmentation. Consist of *encoder*
@@ -65,8 +67,18 @@ class Unet(SegmentationModel):
         classes: int = 1,
         activation: Optional[Union[str, callable]] = None,
         aux_params: Optional[dict] = None,
+        do_mutual_attention: bool = True,
+        device = None
     ):
         super().__init__()
+
+        self.do_mutual_attention = do_mutual_attention
+        if do_mutual_attention:
+            self.attention_modules = torch.nn.ModuleList()
+            for channels in [64, 128, 256, 512]:
+                attention_module = MutualAttention(channels)
+                attention_module.to(device)
+                self.attention_modules.append(attention_module)
 
         self.encoder = get_encoder(
             encoder_name,
@@ -98,3 +110,96 @@ class Unet(SegmentationModel):
 
         self.name = "u-{}".format(encoder_name)
         self.initialize()
+    
+
+    def forward(self, x):
+        """Sequentially pass `x` trough model`s encoder, decoder and heads"""
+
+        self.check_input_shape(x)
+
+        features = self.encoder(x)
+
+        #if self.do_mutual_attention:
+        #    self.mutual_attention(features)
+
+        decoder_output = self.decoder(*features)
+
+        masks = self.segmentation_head(decoder_output)
+
+        if self.classification_head is not None:
+            labels = self.classification_head(features[-1])
+            return masks, labels
+
+        return masks
+
+
+    def mutual_attention(self, features):
+        '''
+        Modifies features in-place
+        Applies mutual attention between successive slices
+        For example, for slices [0, 1, 2, ...] slice 1 is enriched with information of slices 0 and 2
+        '''
+
+        #*features_shallow, features_last_layer = features
+        #new_values = torch.zeros(features_last_layer.shape)
+        new_features = []
+        for features_index, feature_element in enumerate(features[2:]):
+            new_values = torch.zeros(feature_element.shape)
+            for index in range(1, feature_element.shape[0] - 1):
+
+                features_before  = feature_element[index - 1]
+                features_current = feature_element[index]
+                features_after   = feature_element[index + 1]
+
+                attention_value = self.attention_modules[features_index](features_before, features_current, features_after)
+                new_values[index] = feature_element[index] + attention_value
+
+            new_features.append(new_values)
+            #features[-1][index] = features[-1][index] + 5#attention_value # TODO: define attention here
+        #return [*features_shallow, features_last_layer]
+        return new_features
+
+
+class MutualAttention(torch.nn.Module):
+    "Self attention layer for `n_channels`."
+    def __init__(self, n_channels):
+        super().__init__()
+        out_channels = max(3, n_channels//8)
+        self.query = torch.nn.Conv2d(in_channels=n_channels, out_channels=out_channels, kernel_size=1, padding=0)
+        self.key = torch.nn.Conv2d(in_channels=n_channels, out_channels=out_channels, kernel_size=1, padding=0)
+        self.value = torch.nn.Conv2d(in_channels=n_channels, out_channels=n_channels, kernel_size=1, padding=0)
+        #self.query,self.key,self.value = [self._conv(n_channels, c) for c in (n_channels//8,n_channels//8,n_channels)]
+        self.gamma_before = torch.nn.Parameter(torch.tensor([0.5]))
+        self.gamma_after = torch.nn.Parameter(torch.tensor([0.5]))
+
+    def forward(self, features_before, features_current, features_after):
+        #Notation from the paper.
+
+        channels, width, height = features_current.shape
+        query = self.query(features_current)
+        keys_before = self.key(features_before)
+        keys_after = self.key(features_after)
+        values_before = self.value(features_before)
+        values_after = self.value(features_after)
+
+        query = query.view(query.shape[0], -1)
+        keys_before = keys_before.view(query.shape[0], -1)
+        keys_after = keys_after.view(keys_after.shape[0], -1)
+        values_before = values_before.view(values_before.shape[0], -1)
+        values_after = values_after.view(values_after.shape[0], -1)
+
+        query = query.T
+
+        query = query[None, ...]
+        keys_before = keys_before[None, ...]
+        keys_after = keys_after[None, ...]
+        values_before = values_before[None, ...]
+        values_after = values_after[None, ...]
+  
+        similarity_before = torch.nn.functional.softmax(torch.bmm(query, keys_before), dim=0)
+        similarity_after = torch.nn.functional.softmax(torch.bmm(query, keys_after), dim=0)
+
+        attention = self.gamma_before * torch.bmm(values_before, similarity_before) + self.gamma_after * torch.bmm(values_after, similarity_after)
+        attention = attention.view(channels, width, height)
+ 
+        return attention
