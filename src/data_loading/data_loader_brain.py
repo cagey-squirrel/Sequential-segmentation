@@ -11,11 +11,11 @@ import os
 import random
 from src.data_loading.augmentors import augment_images
 import h5py
-from src.data_loading.util import crop_square, split_data_train_test
+from src.data_loading.util import crop_square, split_data_train_test, merge_patient_data, group_patients_into_tensors
 
 
 
-def get_brain_dataloaders(data_dir, batch_size, test_data_percentage, ensemble, split_by_patient, augment, shuffle_training, split_seed):
+def get_brain_dataloaders(data_dir, batch_size, test_data_percentage, ensemble, split_by_patient, augment, shuffle_training, split_seed, channels):
     '''
     Loads images from data_dir
     Inputs:
@@ -32,9 +32,10 @@ def get_brain_dataloaders(data_dir, batch_size, test_data_percentage, ensemble, 
     
     
     training_data, testing_data = split_data_train_test(all_data, test_data_percentage, ensemble, split_by_patient, split_seed)
+    training_data, testing_data = merge_patient_data(training_data, testing_data)
 
-    training_dataset = BrainCancerDataset(training_data)
-    testing_dataset = BrainCancerDataset(testing_data)
+    training_dataset = BrainCancerDataset(training_data, channels)
+    testing_dataset = BrainCancerDataset(testing_data, channels)
 
     training_loader = DataLoader(training_dataset, batch_size=batch_size, shuffle=shuffle_training)
     testing_loader = DataLoader(testing_dataset, batch_size=batch_size, shuffle=False)
@@ -142,16 +143,36 @@ def read_tif_image(path):
 
 
 class BrainCancerDataset(Dataset):
-    def __init__(self, data):
+    def __init__(self, data, channels='single'):
         self.data = data
+        self.channels = channels
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, index):
 
+    
         image, mask, name = self.data[index]
-        return image, mask, name
+
+        if self.channels == 'single':
+            return image, mask, name
+        
+             
+        if index == 0:
+            image_before = image
+        else:
+            image_before = self.data[index-1][0]
+
+        if index == (len(self.data)-1):
+            image_after = image
+        else:
+            image_after = self.data[index+1][0]
+
+        #images = torch.cat([image_before, image, image_after])
+        images = torch.stack([image_before, image, image_after])
+        
+        return images, mask, name
     
 
 def preprocess_image_and_mask(image, mask):
