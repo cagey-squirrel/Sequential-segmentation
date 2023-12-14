@@ -1,5 +1,6 @@
-from src.data_loading.data_loader_brats import get_brats_dataloaders
-from src.data_loading.data_loader_brain import get_brain_dataloaders
+from src.data_loading.data_loader_brats   import get_brats_dataloaders
+from src.data_loading.data_loader_brain   import get_brain_dataloaders
+from src.data_loading.data_loader_patient import get_patient_dataloaders
 
 from src.loss_and_metrics.dice_loss import DiceLoss 
 from src.loss_and_metrics.util import get_batch_metrics
@@ -24,7 +25,9 @@ def training(unet, training_data, device, optimizer, loss_function, epoch_num, o
 
     total_loss = 0
     metrics = torch.zeros(5, device=device)
-    total_slices = 0                                                                                                                                   
+    total_slices = 0   
+    slices_in_batch = 0
+    batch_loss = 0                                                                                                                                
     epoch_path = os.path.join(output_train_path, str(epoch_num))
     os.mkdir(epoch_path)
 
@@ -36,7 +39,17 @@ def training(unet, training_data, device, optimizer, loss_function, epoch_num, o
             inputs, labels = inputs.to(device), labels.to(device)
             predictions = unet(inputs)
 
+            #print(predictions.shape)
             loss = loss_function(predictions, labels)
+            batch_loss += loss
+            slices_in_batch += labels.shape[0]
+            #if slices_in_batch >= 64 or batch_index == len(training_data) - 1:
+            #    batch_loss /= slices_in_batch
+            #    batch_loss.backward()
+            #    optimizer.step()
+            #    batch_loss = 0
+            #    slices_in_batch = 0
+                
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
@@ -46,9 +59,10 @@ def training(unet, training_data, device, optimizer, loss_function, epoch_num, o
 
             save_prediction_and_truth(inputs, predictions, labels, epoch_path, names, epoch_num, batch_index, "training")
 
-    total_loss /= len(training_data)
+    total_loss /=  len(training_data) #total_slices #len(training_data)
     metrics /= total_slices
     info_dump(total_loss, metrics, epoch_num, output_file, 'train')
+    #training_data.schuffle_data()
 
 
 def validation(unet, eval_data, device, loss_function, epoch_num, output_file, output_valid_path, params):
@@ -75,7 +89,7 @@ def validation(unet, eval_data, device, loss_function, epoch_num, output_file, o
 
             save_prediction_and_truth(inputs, predictions, labels, epoch_path, names, epoch_num, batch_index, "validation")
     
-    total_loss /= len(eval_data)
+    total_loss /= len(eval_data) #total_slices
     metrics /= total_slices
     info_dump(total_loss, metrics, epoch_num, output_file, 'valid')
 
@@ -92,19 +106,35 @@ def train(params, split_seed=1302):
 
     torch.backends.cudnn.benchmark = False
     torch.use_deterministic_algorithms(True)
-    
+    #torch.autograd.set_detect_anomaly(True)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    channels = params['channels']
     if params['dataset_type'] == 'brats':
         get_dataloaders = get_brats_dataloaders
         input_channels = 4
     elif params['dataset_type'] == 'brain':
         get_dataloaders = get_brain_dataloaders
+        if channels == 'single':
+            input_channels = 3
+        elif channels == 'triple':
+            input_channels = 9
+    elif params['dataset_type'] == 'patient':
+        get_dataloaders = get_patient_dataloaders
         input_channels = 3
 
     encoder_acrhitecture = params['encoder_acrhitecture']
     attention = params['attention']
+    do_mutual_attention = params['do_mutual_attention']
     weights = 'imagenet'
-    unet = SmpUnet(encoder_acrhitecture, input_channels, 1, weights=weights, attention=attention)
+    
+    unet = SmpUnet(encoder_acrhitecture, input_channels, 1, weights=weights, attention=attention, do_mutual_attention=do_mutual_attention, device=device)
+    print(sum(p.numel() for p in unet.parameters() if p.requires_grad))#; exit(0)
+    
     #preprocess_fn = smp.encoders.get_preprocessing_fn(encoder_acrhitecture, weights)
+
+    #if "triple" in attention: 
+    #    params['shuffle_training'] = False
 
     loader_train, loader_valid = get_dataloaders(
                                         params['data_dir'], batch_size=params['batch_size'], 
@@ -112,21 +142,19 @@ def train(params, split_seed=1302):
                                         ensemble=params['ensemble'], 
                                         split_by_patient=params['split_by_patient'], 
                                         augment=params['augment'], shuffle_training=params['shuffle_training'],
-                                        split_seed=split_seed
+                                        split_seed=split_seed, channels=channels
                                     )
     #state_dict = torch.load("src/trained_models/unet_model_time_2022-08-25 16:43:55.471303.pt")
     # unet.load_state_dict(state_dict['model_state_dict'])
     #unet.load_state_dict(state_dict)
 
-    num_epochs = params['num_epochs']
-                                                                                                    
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")                                                                                                                             
+    num_epochs = params['num_epochs']                                                                                                                             
     unet.to(device)
     
     optimizer = torch.optim.Adam(unet.parameters(), lr=params['learning_rate'], weight_decay=params['regularization'])
     loss_function = DiceLoss()
 
-    folder_name = 'resnet34'
+    folder_name = 'resnet34-patience-100'
     output_dir_path, train_output_text_file, test_output_text_file = prepare_output_files(params, folder_name)
     output_valid_path = os.path.join(output_dir_path, 'valid')   
     output_train_path = os.path.join(output_dir_path, 'train')   
@@ -146,7 +174,7 @@ def train(params, split_seed=1302):
         start = time()
         current_dice_score = validation(unet, loader_valid, device, loss_function, epoch, test_output_text_file, output_valid_path, params)
         training(unet, loader_train, device, optimizer, loss_function, epoch, train_output_text_file, output_train_path, params)
-        print(f'Epoch finished in {time() - start} seconds \n\n')
+        print(f'Epoch finished in {time() - start} seconds dice-score = {current_dice_score} while max is {max_dice_score} \n\n')
 
 
         # Learning rate optimization----------------------------------------------
