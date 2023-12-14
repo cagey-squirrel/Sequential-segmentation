@@ -5,6 +5,7 @@ from torch.utils.data import random_split
 import os
 import json
 from matplotlib import pyplot as plt
+import torch
 
 
 def ensemble_data(training_data):
@@ -47,8 +48,22 @@ def split_data_train_test(data, test_data_percentage, ensemble, split_by_patient
         # Data is grouped by patient
         # Now that we split data into train and test datasets by patient
         # we can unify images of all patients in these sets together
-        train_data = [volume for patient in train_data for volume in patient]
-        test_data =  [volume for patient in test_data for volume in patient]
+        
+        # DEPRECATED: Moved to separate function called merge_patient_data
+        #patients_len = []
+        #for patient in train_data:
+        #    patients_len.append(len(patient))
+#
+        #train_data = [volume for patient in train_data for volume in patient]
+        #random.shuffle(train_data)
+        #start_index = 0
+        #new_train_data = []
+        #for patient_len in patients_len:
+        #    patient_data = train_data[start_index:start_index+patient_len]
+        #    new_train_data.append(patient_data)
+        #    start_index += patient_len
+        #train_data = new_train_data
+        #test_data =  [volume for patient in test_data for volume in patient]
     
     else:
 
@@ -70,6 +85,39 @@ def split_data_train_test(data, test_data_percentage, ensemble, split_by_patient
 
     return train_data, test_data
 
+
+def merge_patient_data(train_data, test_data):
+    '''
+    Input train_data and test_data scans are gouped by patient
+    This function merges all scans into a single list
+    '''
+
+    train_data = [volume for patient in train_data for volume in patient]
+    test_data =  [volume for patient in test_data for volume in patient]
+
+    return train_data, test_data
+
+
+def group_patients_into_tensors(data):
+    '''
+    Input data scans are gouped by patient
+    For each patient, list of scans is transformed into a tensor of scans
+    This tensor of scans now serves as a batch dimension
+    '''
+    
+    tensor_data = []
+    for patient_data in data:
+        patient_scans = []
+        patient_masks = []
+        patient_names = []
+        for scan, mask, name in patient_data:
+            patient_scans.append(scan)
+            patient_masks.append(mask)
+            patient_names.append(name)
+    
+        patient_tensor_data = torch.stack(patient_scans), torch.stack(patient_masks), patient_names
+        tensor_data.append(patient_tensor_data)
+    return tensor_data
 
 
 def crop_square(image, square_size=224):
@@ -139,6 +187,8 @@ def save_prediction_and_truth(inputs, y_pred, y_true, path, names, epoch_num, ba
 
     figure, axis = plt.subplots(1, 3)
     num_iter = min(y_true.shape[0], 8)
+    #if mode == 'validation':
+    #    num_iter = y_true.shape[0]
     
     for i in range(num_iter):
 
