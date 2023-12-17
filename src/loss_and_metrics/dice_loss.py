@@ -5,9 +5,10 @@ from src.data_loading.util import save_prediction_and_truth
 
 class DiceLoss(nn.Module):
 
-    def __init__(self):
+    def __init__(self, aggregation):
         super(DiceLoss, self).__init__()
         self.smooth = 1.0
+        self.aggregation = aggregation
     
     def forward(self, y_pred, y_true):
         return self.basic_dice_loss(y_pred, y_true)
@@ -24,4 +25,8 @@ class DiceLoss(nn.Module):
         score = (2. * cancer_intersection + self.smooth) / (cancer_union + self.smooth)
         loss = 1. - score
 
-        return loss.mean()
+ 
+        if self.aggregation == 'mean':
+            return loss.mean()
+        if self.aggregation == 'sum':
+            return loss.sum()

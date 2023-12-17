@@ -19,50 +19,65 @@ import os
 import sys
 sys.path.append("...") # Adds higher directory to python modules path.
 
+import nvidia_smi
+nvidia_smi.nvmlInit()
+handle = nvidia_smi.nvmlDeviceGetHandleByIndex(0)
+
+
 
 def training(unet, training_data, device, optimizer, loss_function, epoch_num, output_file, output_train_path, params):
     unet.train()
 
-    total_loss = 0
-    metrics = torch.zeros(5, device=device)
-    total_slices = 0   
-    slices_in_batch = 0
-    batch_loss = 0                                                                                                                                
+
+    aggregation = params['aggregation']
+    total_loss, total_slices, slices_in_batch, last_slices_in_batch = 0, 0, 0, 1
+    metrics = torch.zeros(5, device=device)                                                                                                        
     epoch_path = os.path.join(output_train_path, str(epoch_num))
     os.mkdir(epoch_path)
 
     with torch.set_grad_enabled(True):
         for batch_index, data in enumerate(training_data):
-            optimizer.zero_grad()
+            
 
             inputs, labels, names = data
             inputs, labels = inputs.to(device), labels.to(device)
             predictions = unet(inputs)
-
-            #print(predictions.shape)
             loss = loss_function(predictions, labels)
-            batch_loss += loss
-            slices_in_batch += labels.shape[0]
-            #if slices_in_batch >= 64 or batch_index == len(training_data) - 1:
-            #    batch_loss /= slices_in_batch
-            #    batch_loss.backward()
-            #    optimizer.step()
-            #    batch_loss = 0
-            #    slices_in_batch = 0
-                
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
+ 
+            
 
+            if aggregation == 'mean':
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+            
+            elif aggregation == 'sum':
+                loss.backward()
+                slices_in_batch += labels.shape[0]
+                if slices_in_batch >= 32 or batch_index == len(training_data) - 1:
+                    
+                    
+                    optimizer.param_groups[0]['lr'] = optimizer.param_groups[0]['lr'] / slices_in_batch * last_slices_in_batch
+                    optimizer.step()
+                    
+                    last_slices_in_batch = slices_in_batch
+                    slices_in_batch = 0
+                    optimizer.zero_grad()
+                
+            
+            total_loss += loss.detach().item()
             metrics += get_batch_metrics(predictions, labels, params['probability_treshold'], device)
             total_slices += labels.shape[0]
 
             save_prediction_and_truth(inputs, predictions, labels, epoch_path, names, epoch_num, batch_index, "training")
-
-    total_loss /=  len(training_data) #total_slices #len(training_data)
+    
+    if aggregation == 'mean':
+        total_loss /= len(training_data)
+    elif aggregation == 'sum':
+        total_loss /= total_slices
     metrics /= total_slices
     info_dump(total_loss, metrics, epoch_num, output_file, 'train')
-    #training_data.schuffle_data()
+    # training_data.schuffle_data()
 
 
 def validation(unet, eval_data, device, loss_function, epoch_num, output_file, output_valid_path, params):
@@ -70,7 +85,7 @@ def validation(unet, eval_data, device, loss_function, epoch_num, output_file, o
 
     metrics = torch.zeros(5, device=device)
     total_slices = 0
-                                                                                                                                     
+    aggregation = params['aggregation']                                                                                                                                 
     epoch_path = os.path.join(output_valid_path, str(epoch_num))
     os.mkdir(epoch_path)
 
@@ -85,11 +100,15 @@ def validation(unet, eval_data, device, loss_function, epoch_num, output_file, o
             loss = loss_function(predictions, labels)
             metrics += get_batch_metrics(predictions, labels, params['probability_treshold'], device)
             total_slices += labels.shape[0]
-            total_loss += loss.item()
+            total_loss += loss.detach().item()
 
             save_prediction_and_truth(inputs, predictions, labels, epoch_path, names, epoch_num, batch_index, "validation")
     
-    total_loss /= len(eval_data) #total_slices
+    if aggregation == 'mean':
+        total_loss /= len(eval_data)
+    elif aggregation == 'sum':
+        total_loss /= total_slices
+   
     metrics /= total_slices
     info_dump(total_loss, metrics, epoch_num, output_file, 'valid')
 
@@ -107,7 +126,7 @@ def train(params, split_seed=1302):
     torch.backends.cudnn.benchmark = False
     torch.use_deterministic_algorithms(True)
     #torch.autograd.set_detect_anomaly(True)
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
     channels = params['channels']
     if params['dataset_type'] == 'brats':
@@ -125,10 +144,10 @@ def train(params, split_seed=1302):
 
     encoder_acrhitecture = params['encoder_acrhitecture']
     attention = params['attention']
-    do_mutual_attention = params['do_mutual_attention']
+    aggregation = params['aggregation']
     weights = 'imagenet'
     
-    unet = SmpUnet(encoder_acrhitecture, input_channels, 1, weights=weights, attention=attention, do_mutual_attention=do_mutual_attention, device=device)
+    unet = SmpUnet(encoder_acrhitecture, input_channels, 1, weights=weights, attention=attention, device=device)
     print(sum(p.numel() for p in unet.parameters() if p.requires_grad))#; exit(0)
     
     #preprocess_fn = smp.encoders.get_preprocessing_fn(encoder_acrhitecture, weights)
@@ -152,7 +171,7 @@ def train(params, split_seed=1302):
     unet.to(device)
     
     optimizer = torch.optim.Adam(unet.parameters(), lr=params['learning_rate'], weight_decay=params['regularization'])
-    loss_function = DiceLoss()
+    loss_function = DiceLoss(aggregation)
 
     folder_name = 'resnet34-patience-100'
     output_dir_path, train_output_text_file, test_output_text_file = prepare_output_files(params, folder_name)
@@ -162,7 +181,7 @@ def train(params, split_seed=1302):
     trained_model_dir = os.path.join(params['trained_models_path'], f"{folder_name}_{str(datetime.now())[-6:]}.pt")
     os.mkdir(trained_model_dir)
 
-    max_dice_score = 0
+    max_dice_score = torch.zeros(1, device=device)
     epoch = 0
     patience = params["patience"]
     no_progress_epochs = 0
@@ -174,7 +193,7 @@ def train(params, split_seed=1302):
         start = time()
         current_dice_score = validation(unet, loader_valid, device, loss_function, epoch, test_output_text_file, output_valid_path, params)
         training(unet, loader_train, device, optimizer, loss_function, epoch, train_output_text_file, output_train_path, params)
-        print(f'Epoch finished in {time() - start} seconds dice-score = {current_dice_score} while max is {max_dice_score} \n\n')
+        print(f'Epoch finished in {str(time() - start)[:5]} seconds, lr = {str(optimizer.param_groups[0]["lr"])[:8]},  dice-score = {str(current_dice_score.item())[:5]} while max is {str(max_dice_score.item())[:5]} \n\n')
 
 
         # Learning rate optimization----------------------------------------------
