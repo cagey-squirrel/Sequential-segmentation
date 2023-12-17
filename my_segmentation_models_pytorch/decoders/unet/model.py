@@ -67,18 +67,10 @@ class Unet(SegmentationModel):
         classes: int = 1,
         activation: Optional[Union[str, callable]] = None,
         aux_params: Optional[dict] = None,
-        do_mutual_attention: bool = True,
         device = None
     ):
         super().__init__()
 
-        self.do_mutual_attention = do_mutual_attention
-        if do_mutual_attention:
-            self.attention_modules = torch.nn.ModuleList()
-            for channels in [64, 128, 256, 512]:
-                attention_module = MutualAttention(channels)
-                attention_module.to(device)
-                self.attention_modules.append(attention_module)
 
         self.encoder = get_encoder(
             encoder_name,
@@ -118,9 +110,6 @@ class Unet(SegmentationModel):
         self.check_input_shape(x)
 
         features = self.encoder(x)
-
-        #if self.do_mutual_attention:
-        #    self.mutual_attention(features)
 
         decoder_output = self.decoder(*features)
 

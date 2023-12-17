@@ -26,7 +26,7 @@ from copy import deepcopy
 
 import torch.nn as nn
 
-from torchvision.models.resnet import ResNet
+from torchvision.models.resnet import ResNet, MAResNet
 from torchvision.models.resnet import BasicBlock, SCSEBlock
 from torchvision.models.resnet import Bottleneck
 from pretrainedmodels.models.torchvision_models import pretrained_settings
@@ -70,7 +70,7 @@ class ResNetEncoder(ResNet, EncoderMixin):
         super().load_state_dict(state_dict, **kwargs)
 
 
-class MAResNetEncoder(ResNet, EncoderMixin):
+class MAResNetEncoder(MAResNet, EncoderMixin):
     def __init__(self, out_channels, depth=5, **kwargs):
         super().__init__(**kwargs)
         self._depth = depth
