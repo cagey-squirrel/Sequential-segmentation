@@ -19,11 +19,6 @@ import os
 import sys
 sys.path.append("...") # Adds higher directory to python modules path.
 
-import nvidia_smi
-nvidia_smi.nvmlInit()
-handle = nvidia_smi.nvmlDeviceGetHandleByIndex(0)
-
-
 
 def training(unet, training_data, device, optimizer, loss_function, epoch_num, output_file, output_train_path, params):
     unet.train()
@@ -75,9 +70,9 @@ def training(unet, training_data, device, optimizer, loss_function, epoch_num, o
         total_loss /= len(training_data)
     elif aggregation == 'sum':
         total_loss /= total_slices
+        training_data.schuffle_data()
     metrics /= total_slices
     info_dump(total_loss, metrics, epoch_num, output_file, 'train')
-    # training_data.schuffle_data()
 
 
 def validation(unet, eval_data, device, loss_function, epoch_num, output_file, output_valid_path, params):
