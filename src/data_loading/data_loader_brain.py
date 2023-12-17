@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 from datetime import datetime
 import os
 import random
-from src.data_loading.augmentors import augment_images
+from src.data_loading.augmentors import augment_images, rotate_images, shear_images
 import h5py
 from src.data_loading.util import crop_square, split_data_train_test, merge_patient_data, group_patients_into_tensors
 
@@ -33,6 +33,11 @@ def get_brain_dataloaders(data_dir, batch_size, test_data_percentage, ensemble, 
     
     training_data, testing_data = split_data_train_test(all_data, test_data_percentage, ensemble, split_by_patient, split_seed)
     training_data, testing_data = merge_patient_data(training_data, testing_data)
+
+    if augment:
+        print(f'Data size pre augmentation = {len(training_data)}')
+        augment_data(training_data)
+        print(f'Data size after augmentation = {len(training_data)}')
 
     training_dataset = BrainCancerDataset(training_data, channels)
     testing_dataset = BrainCancerDataset(testing_data, channels)
@@ -59,11 +64,11 @@ def augment_data(training_data):
     for v in training_data:
         scan, mask, name = v
 
-        plt.show()
+        augmented_scan, augmented_mask = rotate_images(scan, mask)
+        augmented_training_data.append((augmented_scan, augmented_mask, "rotated_" + name))
 
-        if random.uniform(0, 1) > 0.5:
-            augmented_scan, augmented_mask = augment_images(scan, mask)
-            augmented_training_data.append((augmented_scan, augmented_mask, "augmented_" + name))    
+        augmented_scan, augmented_mask = shear_images(scan, mask)
+        augmented_training_data.append((augmented_scan, augmented_mask, "sheared_" + name))    
 
     training_data.extend(augmented_training_data)
 
