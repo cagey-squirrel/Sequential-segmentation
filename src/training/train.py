@@ -1,6 +1,7 @@
 from src.data_loading.data_loader_brats   import get_brats_dataloaders
 from src.data_loading.data_loader_brain   import get_brain_dataloaders
 from src.data_loading.data_loader_patient import get_patient_dataloaders
+from src.data_loading.data_loader_3x      import get_3x_dataloaders
 
 from src.loss_and_metrics.dice_loss import DiceLoss 
 from src.loss_and_metrics.util import get_batch_metrics
@@ -29,12 +30,19 @@ def training(unet, training_data, device, optimizer, loss_function, epoch_num, o
     metrics = torch.zeros(5, device=device)                                                                                                        
     epoch_path = os.path.join(output_train_path, str(epoch_num))
     os.mkdir(epoch_path)
-
+    #print(training_data.dataset.data)
     with torch.set_grad_enabled(True):
         for batch_index, data in enumerate(training_data):
             
 
             inputs, labels, names = data
+
+
+            if params['dataset_type'] == '3x':
+                
+                batches, seq, channels, width, height = inputs.shape
+                inputs = inputs.view(batches * seq, channels, width, height)
+
             inputs, labels = inputs.to(device), labels.to(device)
             predictions = unet(inputs)
             loss = loss_function(predictions, labels)
@@ -49,7 +57,7 @@ def training(unet, training_data, device, optimizer, loss_function, epoch_num, o
             elif aggregation == 'sum':
                 loss.backward()
                 slices_in_batch += labels.shape[0]
-                if slices_in_batch >= 32 or batch_index == len(training_data) - 1:
+                if slices_in_batch >= 128 or batch_index == len(training_data) - 1:
                     
                     
                     optimizer.param_groups[0]['lr'] = optimizer.param_groups[0]['lr'] / slices_in_batch * last_slices_in_batch
@@ -64,16 +72,19 @@ def training(unet, training_data, device, optimizer, loss_function, epoch_num, o
             metrics += get_batch_metrics(predictions, labels, params['probability_treshold'], device)
             total_slices += labels.shape[0]
 
-            save_prediction_and_truth(inputs, predictions, labels, epoch_path, names, epoch_num, batch_index, "training")
+            save_prediction_and_truth(inputs, predictions, labels, epoch_path, names, epoch_num, batch_index, "training", params['dataset_type'])
     
     if aggregation == 'mean':
         total_loss /= len(training_data)
     elif aggregation == 'sum':
         total_loss /= total_slices
-        training_data.schuffle_data()
+        optimizer.param_groups[0]['lr'] = optimizer.param_groups[0]['lr'] * last_slices_in_batch
+        
     metrics /= total_slices
     info_dump(total_loss, metrics, epoch_num, output_file, 'train')
 
+    if params['dataset_type'] == 'patient':
+        training_data.schuffle_data()
 
 def validation(unet, eval_data, device, loss_function, epoch_num, output_file, output_valid_path, params):
     unet.eval()
@@ -89,6 +100,11 @@ def validation(unet, eval_data, device, loss_function, epoch_num, output_file, o
         for batch_index, data in enumerate(eval_data):
 
             inputs, labels, names = data
+
+            if params['dataset_type'] == '3x':
+                batches, seq, channels, width, height = inputs.shape
+                inputs = inputs.view(batches * seq, channels, width, height)
+
             inputs, labels = inputs.to(device), labels.to(device)
             predictions = unet(inputs)
             
@@ -97,7 +113,7 @@ def validation(unet, eval_data, device, loss_function, epoch_num, output_file, o
             total_slices += labels.shape[0]
             total_loss += loss.detach().item()
 
-            save_prediction_and_truth(inputs, predictions, labels, epoch_path, names, epoch_num, batch_index, "validation")
+            save_prediction_and_truth(inputs, predictions, labels, epoch_path, names, epoch_num, batch_index, "validation", params['dataset_type'])
     
     if aggregation == 'mean':
         total_loss /= len(eval_data)
@@ -136,13 +152,18 @@ def train(params, split_seed=1302):
     elif params['dataset_type'] == 'patient':
         get_dataloaders = get_patient_dataloaders
         input_channels = 3
+    elif params['dataset_type'] == '3x':
+        get_dataloaders = get_3x_dataloaders
+        input_channels = 3
 
     encoder_acrhitecture = params['encoder_acrhitecture']
     attention = params['attention']
     aggregation = params['aggregation']
     weights = 'imagenet'
+    layer_normalization_type = params['layer_normalization_type']
     
-    unet = SmpUnet(encoder_acrhitecture, input_channels, 1, weights=weights, attention=attention, device=device)
+    
+    unet = SmpUnet(encoder_acrhitecture, input_channels, 1, weights=weights, attention=attention, layer_normalization_type=layer_normalization_type, device=device)
     print(sum(p.numel() for p in unet.parameters() if p.requires_grad))#; exit(0)
     
     #preprocess_fn = smp.encoders.get_preprocessing_fn(encoder_acrhitecture, weights)
