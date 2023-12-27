@@ -26,8 +26,8 @@ from copy import deepcopy
 
 import torch.nn as nn
 
-from torchvision.models.resnet import ResNet, MAResNet
-from torchvision.models.resnet import BasicBlock, SCSEBlock
+from torchvision.models.resnet import ResNet, MAResNet, AttentionModule
+from torchvision.models.resnet import BasicBlock, SCSEBlock, LNBlock
 from torchvision.models.resnet import Bottleneck
 from pretrainedmodels.models.torchvision_models import pretrained_settings
 
@@ -98,10 +98,7 @@ class MAResNetEncoder(MAResNet, EncoderMixin):
         features = []
         for i in range(self._depth + 1):
             x = stages[i](x)
-            print(x.shape)
             features.append(x)
-        
-        exit(-1)
 
         return features
 
