@@ -35,6 +35,11 @@ class DecoderBlock(nn.Module):
     def forward(self, x, skip=None):
         x = F.interpolate(x, scale_factor=2, mode="nearest")
         if skip is not None:
+            if skip.shape[0] > x.shape[0]:
+                batch_x_time, channels, width, height = skip.shape
+                skip = skip.view((batch_x_time // 3, 3, channels, width, height))
+                skip = skip[:, 1, ...]
+                
             x = torch.cat([x, skip], dim=1)
             x = self.attention1(x)
         x = self.conv1(x)
@@ -99,10 +104,16 @@ class UnetDecoder(nn.Module):
 
         # combine decoder keyword arguments
         kwargs = dict(use_batchnorm=use_batchnorm, attention_type=attention_type)
-        blocks = [
-            DecoderBlock(in_ch, skip_ch, out_ch, **kwargs)
-            for in_ch, skip_ch, out_ch in zip(in_channels, skip_channels, out_channels)
-        ]
+
+        blocks = []
+        for index, (in_ch, skip_ch, out_ch) in enumerate(zip(in_channels, skip_channels, out_channels)):
+            if index in [1]:
+                kwargs = dict(use_batchnorm=use_batchnorm, attention_type=attention_type)
+            else:
+                kwargs = dict(use_batchnorm=use_batchnorm, attention_type=None)
+            block = DecoderBlock(in_ch, skip_ch, out_ch, **kwargs)
+            blocks.append(block)
+        
         self.blocks = nn.ModuleList(blocks)
 
     def forward(self, *features):
