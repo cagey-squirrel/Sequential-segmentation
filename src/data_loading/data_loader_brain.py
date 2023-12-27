@@ -32,7 +32,7 @@ def get_brain_dataloaders(data_dir, batch_size, test_data_percentage, ensemble, 
     
     
     training_data, testing_data = split_data_train_test(all_data, test_data_percentage, ensemble, split_by_patient, split_seed)
-    training_data, testing_data = merge_patient_data(training_data, testing_data)
+    training_data, testing_data = merge_patient_data(training_data), merge_patient_data(testing_data)
 
     if augment:
         print(f'Data size pre augmentation = {len(training_data)}')

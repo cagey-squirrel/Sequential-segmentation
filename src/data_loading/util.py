@@ -86,16 +86,15 @@ def split_data_train_test(data, test_data_percentage, ensemble, split_by_patient
     return train_data, test_data
 
 
-def merge_patient_data(train_data, test_data):
+def merge_patient_data(data):
     '''
-    Input train_data and test_data scans are gouped by patient
+    Input data scans are gouped by patient
     This function merges all scans into a single list
     '''
 
-    train_data = [volume for patient in train_data for volume in patient]
-    test_data =  [volume for patient in test_data for volume in patient]
+    data = [volume for patient in data for volume in patient]
 
-    return train_data, test_data
+    return data
 
 
 def group_patients_into_tensors(data):
@@ -176,7 +175,12 @@ def prepare_output_files(params, folder_name):
 
 
 # Saves the picture of input MRI, model prediction and true label to location from path
-def save_prediction_and_truth(inputs, y_pred, y_true, path, names, epoch_num, batch_index, mode):
+def save_prediction_and_truth(inputs, y_pred, y_true, path, names, epoch_num, batch_index, mode, dataset_type):
+
+    if dataset_type == '3x':  
+        batches_x_seq, channels, width, height = inputs.shape
+        inputs = inputs.view(batches_x_seq // 3, 3, channels, width, height)
+        inputs = inputs[:, 1, ...]
     
     if mode == "validation":
         if not ((epoch_num % 100 == 0) or ((epoch_num % 20 == 0) and batch_index < 3)):
