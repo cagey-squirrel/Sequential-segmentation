@@ -33,16 +33,16 @@ def get_patient_dataloaders(data_dir, batch_size, test_data_percentage, ensemble
     
     training_data, testing_data = split_data_train_test(all_data, test_data_percentage, ensemble, split_by_patient, split_seed)
     training_data = group_patients_into_tensors(training_data)
-    testing_data = group_patients_into_tensors(testing_data)
+    testing_data = merge_patient_data(testing_data)
     #training_data, testing_data = merge_patient_data(training_data, testing_data)
 
     training_dataset = BrainCancerDataset(training_data, channels)
     testing_dataset = BrainCancerDataset(testing_data, channels)
 
     #training_loader = DataLoader(training_dataset, batch_size=batch_size, shuffle=shuffle_training)
-    #testing_loader = DataLoader(testing_dataset, batch_size=batch_size, shuffle=False)
+    testing_loader = DataLoader(testing_dataset, batch_size=batch_size, shuffle=False)
 
-    return training_dataset, testing_dataset
+    return training_dataset, testing_loader
 
 
 def augment_data(training_data):
