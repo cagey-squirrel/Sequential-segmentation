@@ -173,6 +173,35 @@ class AttentionModule(nn.Module):
             self.self_attention = MutualAttention(in_channels)
 
         def forward(self, features):
+            return self.forward2(features)
+        
+
+        def forward1(self, features):
+
+
+            new_features = []
+     
+            for index in range(features.shape[0]):
+                features_current = features[index]
+
+                if index == 0:
+                    features_before = features_current
+                else:
+                    features_before  = features[index - 1]
+
+                if index == features.shape[0] - 1:
+                    features_after = features_current
+                else:
+                    features_after   = features[index + 1]
+
+
+
+                new_feature = self.self_attention(features_before, features_current, features_after)
+                new_features.append(new_feature)
+            
+            return torch.stack(new_features)
+
+        def forward2(self, features):
 
 
             new_features = []
@@ -297,7 +326,7 @@ class MutualAttention(nn.Module):
         f_div_C_after = torch.nn.functional.softmax(f_after, dim=-1)
 
         
-        y_after = torch.matmul(f_div_C_after, values_before)
+        y_after = torch.matmul(f_div_C_after, values_after)
         
         # contiguous here just allocates contiguous chunk of memory
         y_after = y_after.permute(1, 0).contiguous()
@@ -307,7 +336,8 @@ class MutualAttention(nn.Module):
 
 
         # residual connection
-        z = self.gamma_before * W_y_before + self.gamma_after * W_y_after + features_current
+        z = W_y_before + W_y_after + features_current
+        #print(f'z.shape = {z.shape}')
 
         return z
 
