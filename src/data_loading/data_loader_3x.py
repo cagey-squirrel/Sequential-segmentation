@@ -11,7 +11,7 @@ import os
 import random
 from src.data_loading.augmentors import augment_images
 import h5py
-from src.data_loading.util import crop_square, split_data_train_test, merge_patient_data, group_patients_into_tensors
+from src.data_loading.util import crop_square, split_data_train_test, map_index_to_patient
 
 
 
@@ -147,20 +147,6 @@ def read_tif_image(path):
     return image
 
 
-def map_index_to_patient(data):
-
-    index = 0
-    mapping = {}
-
-    for patient_index, patient in enumerate(data):
-        for data_index, patient_data in enumerate(patient):
-            mapping[index] = ((patient_index, data_index))
-            
-            index += 1
-
-    return mapping
-
-
 class BrainCancerDataset(Dataset):
     def __init__(self, data, channels='single', mapping=None):
         self.data = data
@@ -208,8 +194,8 @@ class BrainCancerDataset(Dataset):
 
             return scans, masks, names
     
-    def schuffle_data(self):
-        random.shuffle(self.data)
+    #def schuffle_data(self):
+    #    random.shuffle(self.data)
 
 
 def preprocess_image_and_mask(image, mask):

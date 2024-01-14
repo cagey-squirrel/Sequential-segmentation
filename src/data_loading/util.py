@@ -86,6 +86,20 @@ def split_data_train_test(data, test_data_percentage, ensemble, split_by_patient
     return train_data, test_data
 
 
+def map_index_to_patient(data):
+
+    index = 0
+    mapping = {}
+
+    for patient_index, patient in enumerate(data):
+        for data_index, patient_data in enumerate(patient):
+            mapping[index] = ((patient_index, data_index))
+            
+            index += 1
+
+    return mapping
+
+
 def merge_patient_data(data):
     '''
     Input data scans are gouped by patient
@@ -177,7 +191,7 @@ def prepare_output_files(params, folder_name):
 # Saves the picture of input MRI, model prediction and true label to location from path
 def save_prediction_and_truth(inputs, y_pred, y_true, path, names, epoch_num, batch_index, mode, dataset_type):
 
-    if dataset_type == '3x':  
+    if '3x' in dataset_type:  
         batches_x_seq, channels, width, height = inputs.shape
         inputs = inputs.view(batches_x_seq // 3, 3, channels, width, height)
         inputs = inputs[:, 1, ...]
