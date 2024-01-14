@@ -77,7 +77,7 @@ class MAResNetEncoder(MAResNet, EncoderMixin):
         self._out_channels = out_channels
         self._in_channels = 3
 
-
+        print(f'MA encoder')
 
         del self.fc
         del self.avgpool
@@ -97,6 +97,7 @@ class MAResNetEncoder(MAResNet, EncoderMixin):
 
         features = []
         for i in range(self._depth + 1):
+            #print(f'i = {i}')
             x = stages[i](x)
             features.append(x)
 
@@ -105,6 +106,8 @@ class MAResNetEncoder(MAResNet, EncoderMixin):
     def load_state_dict(self, state_dict, **kwargs):
         state_dict.pop("fc.bias", None)
         state_dict.pop("fc.weight", None)
+        #state_dict.pop("layer3.4.conv1.weight", None)
+        kwargs['strict'] = False
         super().load_state_dict(state_dict, **kwargs)
 
 
